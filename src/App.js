@@ -143,6 +143,77 @@ function BarcodeScanner({ onResult, onClose }) {
   );
 }
 
+function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose }) {
+  const [search, setSearch] = useState("");
+  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
+  const [mode, setMode] = useState("match"); // "match" or "suggest"
+
+  const filtered = snusList.filter(s =>
+    s.name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.brand?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const s = {
+    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
+    box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
+    input: { width: "100%", background: "#111", border: "1px solid #222", borderRadius: 8, padding: "12px 14px", color: "#e8e0d0", fontSize: 14, marginTop: 8, boxSizing: "border-box", fontFamily: "inherit", outline: "none" },
+    btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
+    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+    label: { fontSize: 10, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginTop: 16, display: "block", fontWeight: 700 },
+    card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer" },
+  };
+
+  return (
+    <div style={s.modal} onClick={onClose}>
+      <div style={s.box} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Ukjent strekkode</div>
+        <div style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>EAN: {barcode}</div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <button onClick={() => setMode("match")} style={{ flex: 1, padding: "10px", borderRadius: 8, border: mode === "match" ? "1px solid #e8b84b" : "1px solid #333", background: mode === "match" ? "#1e1e1e" : "none", color: mode === "match" ? "#e8b84b" : "#555", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+            Koble til produkt
+          </button>
+          <button onClick={() => setMode("suggest")} style={{ flex: 1, padding: "10px", borderRadius: 8, border: mode === "suggest" ? "1px solid #e8b84b" : "1px solid #333", background: mode === "suggest" ? "#1e1e1e" : "none", color: mode === "suggest" ? "#e8b84b" : "#555", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+            Foreslå nytt
+          </button>
+        </div>
+
+        {mode === "match" && (
+          <>
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 10 }}>Hvilket produkt er dette?</div>
+            <input style={{ ...s.input, marginTop: 0 }} placeholder="🔍 Søk produkt..." value={search} onChange={e => setSearch(e.target.value)} />
+            <div style={{ marginTop: 10, maxHeight: 300, overflowY: "auto" }}>
+              {filtered.map(snus => (
+                <div key={snus.id} style={s.card} onClick={() => onMatch(snus, barcode)}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>{snus.brand} · {snus.type}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {mode === "suggest" && (
+          <>
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 10 }}>Fyll inn produktinfo – strekkoden legges til automatisk</div>
+            <span style={s.label}>Produktnavn</span>
+            <input style={s.input} placeholder="f.eks. General White" value={newSnus.name} onChange={e => setNewSnus({...newSnus, name: e.target.value})} />
+            <span style={s.label}>Merke</span>
+            <input style={s.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
+            <span style={s.label}>Type</span>
+            <input style={s.input} placeholder="f.eks. White Portion" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
+            <span style={s.label}>Styrke</span>
+            <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
+            <button style={s.btn} onClick={() => onSuggest({ ...newSnus, barcode })}>Send til admin</button>
+          </>
+        )}
+
+        <button style={s.btnOutline} onClick={onClose}>Avbryt</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState("explore");
@@ -162,6 +233,8 @@ export default function App() {
   const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
   const [search, setSearch] = useState("");
   const [showScanner, setShowScanner] = useState(false);
+  const [unknownBarcode, setUnknownBarcode] = useState(null);
+  const [barcodeMatched, setBarcodeMatched] = useState(false);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -233,7 +306,7 @@ export default function App() {
   };
 
   const approvePending = async (item) => {
-    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
     fetchPending(); fetchSnus();
   };
@@ -254,8 +327,29 @@ export default function App() {
       setReviewText("");
       setSubmitted(false);
     } else {
-      alert(`Strekkode ${barcode} ikke funnet. Foreslå produktet!`);
+      setUnknownBarcode(barcode);
     }
+  };
+
+  const handleBarcodeMatch = async (snus, barcode) => {
+    const snusRef = doc(db, "snus", snus.id);
+    await updateDoc(snusRef, { barcode });
+    setUnknownBarcode(null);
+    setBarcodeMatched(true);
+    fetchSnus();
+    setTimeout(() => {
+      setBarcodeMatched(false);
+      setSelectedSnus({ ...snus, barcode });
+      setUserRating(0);
+      setReviewText("");
+      setSubmitted(false);
+    }, 1500);
+  };
+
+  const handleBarcodeSuggest = async (snusData) => {
+    await addDoc(collection(db, "snus_pending"), { ...snusData, submittedBy: displayName, approved: false, createdAt: new Date().toISOString() });
+    setUnknownBarcode(null);
+    alert("Sendt til admin! Strekkoden legges til når produktet godkjennes.");
   };
 
   const filtered = snusList.filter(s =>
@@ -316,6 +410,23 @@ export default function App() {
   return (
     <div style={s.app}>
       {showScanner && <BarcodeScanner onResult={handleScanResult} onClose={() => setShowScanner(false)} />}
+      {unknownBarcode && (
+        <UnknownBarcodeModal
+          barcode={unknownBarcode}
+          snusList={snusList}
+          onMatch={handleBarcodeMatch}
+          onSuggest={handleBarcodeSuggest}
+          onClose={() => setUnknownBarcode(null)}
+        />
+      )}
+      {barcodeMatched && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.8)" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 56 }}>✅</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 12 }}>Strekkode koblet!</div>
+          </div>
+        </div>
+      )}
 
       <div style={s.header}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -449,6 +560,7 @@ export default function App() {
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
                 <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>{item.brand} · {item.type}</div>
                 <FlameStrength value={item.strength} />
+                {item.barcode && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>EAN: {item.barcode}</div>}
                 <div style={{ fontSize: 11, color: "#444", margin: "8px 0" }}>Fra: {item.submittedBy}</div>
                 <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Godkjenn</button>
                 <button style={s.btnRed} onClick={() => rejectPending(item.id)}>✗ Avvis</button>
