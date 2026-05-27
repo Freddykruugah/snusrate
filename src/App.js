@@ -236,7 +236,6 @@ export default function App() {
   const [buddyResults, setBuddyResults] = useState([]);
   const [buddyRequests, setBuddyRequests] = useState([]);
   const [buddies, setBuddies] = useState([]);
-  const [pendingBuddies, setPendingBuddies] = useState([]);
   const [notifCount, setNotifCount] = useState(0);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
@@ -316,7 +315,6 @@ export default function App() {
     } catch(e) {}
   };
 
-  const fetchPendingBuddies = async (uid) => {
     try {
       const q = query(collection(db, "buddy_requests"), where("fromUid", "==", uid), where("status", "==", "pending"));
       const snap = await getDocs(q);
