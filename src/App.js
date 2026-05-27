@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
@@ -102,21 +102,22 @@ function LiveTicker({ allReviews, onClickReview }) {
 function BarcodeScanner({ onResult, onClose }) {
   const videoRef = useRef(null);
   const readerRef = useRef(null);
-  const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(true);
+  const hasScanned = useRef(false);
+
+  const handleResult = useCallback((result) => {
+    if (result && !hasScanned.current) {
+      hasScanned.current = true;
+      onResult(result.getText());
+    }
+  }, [onResult]);
 
   useEffect(() => {
     readerRef.current = new BrowserMultiFormatReader();
-    readerRef.current.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
-      if (result && scanning) {
-        setScanning(false);
-        onResult(result.getText());
-      }
-    });
+    readerRef.current.decodeFromVideoDevice(null, videoRef.current, handleResult);
     return () => {
       if (readerRef.current) readerRef.current.reset();
     };
-  }, []);
+  }, [handleResult]);
 
   return (
     <div style={{
@@ -134,7 +135,6 @@ function BarcodeScanner({ onResult, onClose }) {
       <div style={{ color: "#e8b84b", fontSize: 14, marginTop: 20, letterSpacing: 1 }}>
         Hold strekkoden innenfor rammen
       </div>
-      {error && <div style={{ color: "#cb7e7e", fontSize: 13, marginTop: 10 }}>{error}</div>}
       <button onClick={onClose} style={{
         marginTop: 24, background: "none", border: "1px solid #444",
         color: "#888", borderRadius: 8, padding: "10px 24px", cursor: "pointer", fontSize: 14
@@ -162,7 +162,6 @@ export default function App() {
   const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
   const [search, setSearch] = useState("");
   const [showScanner, setShowScanner] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -248,8 +247,6 @@ export default function App() {
 
   const handleScanResult = (barcode) => {
     setShowScanner(false);
-    setScanResult(barcode);
-    // Søk etter strekkode i databasen
     const found = snusList.find(s => s.barcode === barcode);
     if (found) {
       setSelectedSnus(found);
@@ -257,7 +254,7 @@ export default function App() {
       setReviewText("");
       setSubmitted(false);
     } else {
-      alert(`Strekkode ${barcode} ikke funnet i databasen ennå. Foreslå produktet!`);
+      alert(`Strekkode ${barcode} ikke funnet. Foreslå produktet!`);
     }
   };
 
@@ -394,7 +391,7 @@ export default function App() {
             <div style={s.sectionTitle}>Høyest rated</div>
             {snusList.map((snus, i) => (
               <div key={snus.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a" }}>
-                <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, color: i === 0 ? "#e8b84b" : i === 1 ? "#aaa" : i === 2 ? "#cd7f32" : "#2a2a2a", width: 30, textAlign: "center" }}>
+                <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, width: 30, textAlign: "center" }}>
                   {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
                 </div>
                 <div style={{ flex: 1 }}>
