@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
+import { BrowserMultiFormatReader } from "@zxing/library";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
@@ -79,28 +80,65 @@ function LiveTicker({ allReviews, onClickReview }) {
 
   return (
     <div onClick={() => onClickReview(r)} style={{
-      background: "#111",
-      border: "1px solid #1e1e1e",
-      borderRadius: 8,
-      padding: "10px 14px",
-      marginBottom: 14,
-      cursor: "pointer",
-      opacity: visible ? 1 : 0,
-      transition: "opacity 0.3s",
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
+      background: "#111", border: "1px solid #1e1e1e", borderRadius: 8,
+      padding: "10px 14px", marginBottom: 14, cursor: "pointer",
+      opacity: visible ? 1 : 0, transition: "opacity 0.3s",
+      display: "flex", alignItems: "center", gap: 10,
     }}>
       <div style={{ fontSize: 18 }}>🔴</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "#e8b84b", fontWeight: 700 }}>
           @{r.user} ratet <span style={{ color: "#e8e0d0" }}>{r.snusName}</span>
         </div>
-        <div style={{ fontSize: 11, color: "#555", marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>
           {"★".repeat(r.rating)}{"☆".repeat(5-r.rating)} · {formatDate(r.date)}
-          {r.text && <span style={{ color: "#666" }}>· "{r.text.slice(0,30)}{r.text.length > 30 ? "..." : ""}"</span>}
+          {r.text && <span style={{ color: "#666" }}> · "{r.text.slice(0,30)}{r.text.length > 30 ? "..." : ""}"</span>}
         </div>
       </div>
+    </div>
+  );
+}
+
+function BarcodeScanner({ onResult, onClose }) {
+  const videoRef = useRef(null);
+  const readerRef = useRef(null);
+  const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(true);
+
+  useEffect(() => {
+    readerRef.current = new BrowserMultiFormatReader();
+    readerRef.current.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
+      if (result && scanning) {
+        setScanning(false);
+        onResult(result.getText());
+      }
+    });
+    return () => {
+      if (readerRef.current) readerRef.current.reset();
+    };
+  }, []);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "#000", zIndex: 200,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"
+    }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 430 }}>
+        <video ref={videoRef} style={{ width: "100%", display: "block" }} />
+        <div style={{
+          position: "absolute", inset: 0, border: "2px solid #e8b84b",
+          boxShadow: "0 0 0 9999px rgba(0,0,0,0.6)", borderRadius: 12,
+          margin: "20%"
+        }} />
+      </div>
+      <div style={{ color: "#e8b84b", fontSize: 14, marginTop: 20, letterSpacing: 1 }}>
+        Hold strekkoden innenfor rammen
+      </div>
+      {error && <div style={{ color: "#cb7e7e", fontSize: 13, marginTop: 10 }}>{error}</div>}
+      <button onClick={onClose} style={{
+        marginTop: 24, background: "none", border: "1px solid #444",
+        color: "#888", borderRadius: 8, padding: "10px 24px", cursor: "pointer", fontSize: 14
+      }}>Avbryt</button>
     </div>
   );
 }
@@ -123,11 +161,12 @@ export default function App() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
   const [search, setSearch] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
 
-  // Samle alle reviews på tvers av alle snus
   const allReviews = snusList.flatMap(s =>
     (s.reviews || []).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
   ).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -207,6 +246,21 @@ export default function App() {
     if (snus) { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }
   };
 
+  const handleScanResult = (barcode) => {
+    setShowScanner(false);
+    setScanResult(barcode);
+    // Søk etter strekkode i databasen
+    const found = snusList.find(s => s.barcode === barcode);
+    if (found) {
+      setSelectedSnus(found);
+      setUserRating(0);
+      setReviewText("");
+      setSubmitted(false);
+    } else {
+      alert(`Strekkode ${barcode} ikke funnet i databasen ennå. Foreslå produktet!`);
+    }
+  };
+
   const filtered = snusList.filter(s =>
     s.name?.toLowerCase().includes(search.toLowerCase()) ||
     s.brand?.toLowerCase().includes(search.toLowerCase())
@@ -264,13 +318,18 @@ export default function App() {
 
   return (
     <div style={s.app}>
+      {showScanner && <BarcodeScanner onResult={handleScanResult} onClose={() => setShowScanner(false)} />}
+
       <div style={s.header}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={s.logo}>SnusRate</div>
             <div style={s.logoSub}>Nordic Snus Community</div>
           </div>
-          <button onClick={() => signOut(auth)} style={{ background: "none", border: "1px solid #222", color: "#555", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>Logg ut</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={() => setShowScanner(true)} style={{ background: "none", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>📷</button>
+            <button onClick={() => signOut(auth)} style={{ background: "none", border: "1px solid #222", color: "#555", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>Logg ut</button>
+          </div>
         </div>
       </div>
 
@@ -281,11 +340,13 @@ export default function App() {
       </div>
 
       <div style={s.content}>
-
         {tab === "explore" && (
           <>
             <LiveTicker allReviews={allReviews} onClickReview={openSnusFromReview} />
-            <input style={s.searchBox} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <input style={{ ...s.searchBox, marginBottom: 0, flex: 1 }} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
+              <button onClick={() => setShowScanner(true)} style={{ background: "#141414", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 10, padding: "0 16px", cursor: "pointer", fontSize: 20 }}>📷</button>
+            </div>
             <div style={s.sectionTitle}>Alle snus ({filtered.length})</div>
             {filtered.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center", marginTop: 40 }}>Ingen snus funnet</div>}
             {filtered.map(snus => (
@@ -381,6 +442,8 @@ export default function App() {
             <input style={s.input} placeholder="f.eks. White Portion" value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})} />
             <span style={s.label}>Styrke</span>
             <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
+            <span style={s.label}>Strekkode (EAN)</span>
+            <input style={s.input} placeholder="f.eks. 7311250083068" value={adminNewSnus.barcode || ""} onChange={e => setAdminNewSnus({...adminNewSnus, barcode: e.target.value})} />
             <button style={{ ...s.btn, marginTop: 16 }} onClick={adminAddSnus}>+ Legg til snus</button>
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>Til godkjenning ({pendingList.length})</div>
             {pendingList.length === 0 && <div style={{ color: "#444", fontSize: 13 }}>Ingen ventende forslag.</div>}
