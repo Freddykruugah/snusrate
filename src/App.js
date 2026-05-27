@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
-import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc, setDoc, getDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc, setDoc, getDoc, where } from "firebase/firestore";
 import { BrowserMultiFormatReader } from "@zxing/library";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
@@ -84,10 +84,7 @@ function LiveTicker({ allReviews, onClickReview }) {
     if (allReviews.length === 0) return;
     const interval = setInterval(() => {
       setVisible(false);
-      setTimeout(() => {
-        setIndex(i => (i + 1) % allReviews.length);
-        setVisible(true);
-      }, 400);
+      setTimeout(() => { setIndex(i => (i + 1) % allReviews.length); setVisible(true); }, 400);
     }, 4000);
     return () => clearInterval(interval);
   }, [allReviews.length]);
@@ -235,6 +232,12 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ country: "Norge", city: "", gender: "", age: "", favoriteSnus: "" });
+  const [buddySearch, setBuddySearch] = useState("");
+  const [buddyResults, setBuddyResults] = useState([]);
+  const [buddyRequests, setBuddyRequests] = useState([]);
+  const [buddies, setBuddies] = useState([]);
+  const [pendingBuddies, setPendingBuddies] = useState([]);
+  const [notifCount, setNotifCount] = useState(0);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -258,7 +261,11 @@ export default function App() {
   useEffect(() => {
     onAuthStateChanged(auth, u => {
       setUser(u);
-      if (u) fetchUserProfile(u.uid);
+      if (u) {
+        fetchUserProfile(u.uid);
+        fetchBuddyRequests(u.uid);
+        fetchBuddies(u.uid);
+      }
     });
     fetchSnus();
   }, []);
@@ -289,10 +296,71 @@ export default function App() {
     } catch(e) {}
   };
 
+  const fetchBuddyRequests = async (uid) => {
+    try {
+      const q = query(collection(db, "buddy_requests"), where("toUid", "==", uid), where("status", "==", "pending"));
+      const snap = await getDocs(q);
+      const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setBuddyRequests(requests);
+      setNotifCount(requests.length);
+    } catch(e) {}
+  };
+
+  const fetchBuddies = async (uid) => {
+    try {
+      const q1 = query(collection(db, "buddy_requests"), where("fromUid", "==", uid), where("status", "==", "accepted"));
+      const q2 = query(collection(db, "buddy_requests"), where("toUid", "==", uid), where("status", "==", "accepted"));
+      const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+      const all = [...snap1.docs.map(d => d.data()), ...snap2.docs.map(d => d.data())];
+      setBuddies(all.map(b => b.fromUid === uid ? { name: b.toName, uid: b.toUid } : { name: b.fromName, uid: b.fromUid }));
+    } catch(e) {}
+  };
+
+  const fetchPendingBuddies = async (uid) => {
+    try {
+      const q = query(collection(db, "buddy_requests"), where("fromUid", "==", uid), where("status", "==", "pending"));
+      const snap = await getDocs(q);
+      setPendingBuddies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) {}
+  };
+
+  const searchBuddies = async () => {
+    if (!buddySearch.trim()) return;
+    try {
+      const q = query(collection(db, "users"), where("displayName", ">=", buddySearch), where("displayName", "<=", buddySearch + "\uf8ff"));
+      const snap = await getDocs(q);
+      setBuddyResults(snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => u.uid !== user.uid));
+    } catch(e) {}
+  };
+
+  const sendBuddyRequest = async (toUser) => {
+    const existing = await getDocs(query(collection(db, "buddy_requests"),
+      where("fromUid", "==", user.uid), where("toUid", "==", toUser.uid)));
+    if (!existing.empty) { alert("Forespørsel allerede sendt!"); return; }
+    await addDoc(collection(db, "buddy_requests"), {
+      fromUid: user.uid, fromName: displayName,
+      toUid: toUser.uid, toName: toUser.displayName,
+      status: "pending", createdAt: new Date().toISOString()
+    });
+    alert(`Snusbuddy-forespørsel sendt til @${toUser.displayName}! 🤠`);
+  };
+
+  const acceptBuddy = async (request) => {
+    await updateDoc(doc(db, "buddy_requests", request.id), { status: "accepted" });
+    fetchBuddyRequests(user.uid);
+    fetchBuddies(user.uid);
+    setNotifCount(n => Math.max(0, n - 1));
+  };
+
+  const rejectBuddy = async (request) => {
+    await deleteDoc(doc(db, "buddy_requests", request.id));
+    fetchBuddyRequests(user.uid);
+    setNotifCount(n => Math.max(0, n - 1));
+  };
+
   const saveProfile = async () => {
     if (!user) return;
-    const ref = doc(db, "users", user.uid);
-    await setDoc(ref, { ...profileForm, displayName }, { merge: true });
+    await setDoc(doc(db, "users", user.uid), { ...profileForm, displayName }, { merge: true });
     setUserProfile({ ...profileForm, displayName });
     setEditingProfile(false);
   };
@@ -302,12 +370,11 @@ export default function App() {
       if (authMode === "register") {
         if (!username.trim()) { alert("Velg et brukernavn!"); return; }
         const ageNum = parseInt(age);
-        if (!age || ageNum < 18) { alert("Du må være minst 18 år for å registrere deg!"); return; }
+        if (!age || ageNum < 18) { alert("Du må være minst 18 år!"); return; }
         if (!gender) { alert("Velg kjønn!"); return; }
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
-        const ref = doc(db, "users", result.user.uid);
-        await setDoc(ref, { displayName: username.trim(), age: ageNum, gender, country, city, favoriteSnus: "", approvedProducts: 0 });
+        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), age: ageNum, gender, country, city, favoriteSnus: "", approvedProducts: 0 });
         setUser({ ...result.user, displayName: username.trim() });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -319,8 +386,7 @@ export default function App() {
     if (!userRating || !selectedSnus) return;
     const alreadyRated = selectedSnus.reviews?.some(r => r.user === displayName);
     if (alreadyRated) { alert("Du har allerede ratet denne snusen!"); return; }
-    const snusRef = doc(db, "snus", selectedSnus.id);
-    await updateDoc(snusRef, {
+    await updateDoc(doc(db, "snus", selectedSnus.id), {
       reviews: arrayUnion({ user: displayName, rating: userRating, text: reviewText, date: new Date().toISOString() }),
       totalRatings: (selectedSnus.totalRatings || 0) + 1,
       totalScore: (selectedSnus.totalScore || 0) + userRating,
@@ -340,20 +406,15 @@ export default function App() {
     if (!adminNewSnus.name || !adminNewSnus.brand) return;
     await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
     setAdminNewSnus({ name: "", brand: "", type: "", strength: "3" });
-    fetchSnus();
-    alert("Snus lagt til!");
+    fetchSnus(); alert("Snus lagt til!");
   };
 
   const approvePending = async (item) => {
     await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
-    // Increment approvedProducts for submitter
     if (item.submittedByUid) {
-      const userRef = doc(db, "users", item.submittedByUid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        await updateDoc(userRef, { approvedProducts: (userSnap.data().approvedProducts || 0) + 1 });
-      }
+      const userSnap = await getDoc(doc(db, "users", item.submittedByUid));
+      if (userSnap.exists()) await updateDoc(doc(db, "users", item.submittedByUid), { approvedProducts: (userSnap.data().approvedProducts || 0) + 1 });
     }
     fetchPending(); fetchSnus();
   };
@@ -368,29 +429,19 @@ export default function App() {
   const handleScanResult = (barcode) => {
     setShowScanner(false);
     const found = snusList.find(s => s.barcode === barcode);
-    if (found) {
-      setSelectedSnus(found); setUserRating(0); setReviewText(""); setSubmitted(false);
-    } else {
-      setUnknownBarcode(barcode);
-    }
+    if (found) { setSelectedSnus(found); setUserRating(0); setReviewText(""); setSubmitted(false); }
+    else setUnknownBarcode(barcode);
   };
 
   const handleBarcodeMatch = async (snus, barcode) => {
     await updateDoc(doc(db, "snus", snus.id), { barcode });
-    setUnknownBarcode(null);
-    setBarcodeMatched(true);
-    fetchSnus();
-    setTimeout(() => {
-      setBarcodeMatched(false);
-      setSelectedSnus({ ...snus, barcode });
-      setUserRating(0); setReviewText(""); setSubmitted(false);
-    }, 1500);
+    setUnknownBarcode(null); setBarcodeMatched(true); fetchSnus();
+    setTimeout(() => { setBarcodeMatched(false); setSelectedSnus({ ...snus, barcode }); setUserRating(0); setReviewText(""); setSubmitted(false); }, 1500);
   };
 
   const handleBarcodeSuggest = async (snusData) => {
     await addDoc(collection(db, "snus_pending"), { ...snusData, submittedBy: displayName, submittedByUid: user.uid, approved: false, createdAt: new Date().toISOString() });
-    setUnknownBarcode(null);
-    alert("Sendt til admin!");
+    setUnknownBarcode(null); alert("Sendt til admin!");
   };
 
   const filtered = snusList.filter(s =>
@@ -411,6 +462,7 @@ export default function App() {
     card: { background: "#141414", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+    btnSmall: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 6, padding: "7px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer" },
     btnGreen: { background: "#2d5a3d", color: "#7ecb96", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginRight: 8 },
     btnRed: { background: "#5a2d2d", color: "#cb7e7e", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer" },
     input: { width: "100%", background: "#111", border: "1px solid #222", borderRadius: 8, padding: "12px 14px", color: "#e8e0d0", fontSize: 14, marginTop: 8, boxSizing: "border-box", fontFamily: "inherit", outline: "none" },
@@ -423,6 +475,7 @@ export default function App() {
     pendingCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
     reviewCard: { background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 8, padding: "12px 14px", marginBottom: 8 },
     statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", textAlign: "center", flex: 1 },
+    buddyCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" },
   };
 
   if (!user) return (
@@ -443,17 +496,11 @@ export default function App() {
             <span style={s.label}>Kjønn</span>
             <select style={s.select} value={gender} onChange={e => setGender(e.target.value)}>
               <option value="">Velg kjønn</option>
-              <option value="Mann">Mann</option>
-              <option value="Kvinne">Kvinne</option>
-              <option value="Annet">Annet</option>
+              <option>Mann</option><option>Kvinne</option><option>Annet</option>
             </select>
             <span style={s.label}>Land</span>
             <select style={s.select} value={country} onChange={e => setCountry(e.target.value)}>
-              <option>Norge</option>
-              <option>Sverige</option>
-              <option>Danmark</option>
-              <option>Finland</option>
-              <option>Annet</option>
+              <option>Norge</option><option>Sverige</option><option>Danmark</option><option>Finland</option><option>Annet</option>
             </select>
             <span style={s.label}>By</span>
             <input style={s.input} value={city} onChange={e => setCity(e.target.value)} placeholder="f.eks. Oslo" />
@@ -489,6 +536,11 @@ export default function App() {
           <div><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setShowScanner(true)} style={{ background: "none", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>📷</button>
+            {notifCount > 0 && (
+              <button onClick={() => setTab("profil")} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+                🤠 {notifCount}
+              </button>
+            )}
             <button onClick={() => signOut(auth)} style={{ background: "none", border: "1px solid #222", color: "#555", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>Logg ut</button>
           </div>
         </div>
@@ -584,15 +636,12 @@ export default function App() {
                 </div>
               )}
               {isAdmin && <div style={{ fontSize: 10, color: "#e8b84b", marginTop: 6, letterSpacing: 2.5, fontWeight: 700 }}>⚡ ADMIN</div>}
-
-              {/* Titler */}
               <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
                 <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{ratingTitle}</span>
                 {productTitle && <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{productTitle}</span>}
               </div>
             </div>
 
-            {/* Stats */}
             <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
               <div style={s.statBox}>
                 <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{myReviews.length}</div>
@@ -603,12 +652,11 @@ export default function App() {
                 <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Snitt gitt</div>
               </div>
               <div style={s.statBox}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{approvedCount}</div>
-                <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Godkjente</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{buddies.length}</div>
+                <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Buddies</div>
               </div>
             </div>
 
-            {/* Favorittsnuus */}
             {favSnusObj && (
               <div style={{ marginBottom: 20 }}>
                 <div style={s.sectionTitle}>Favorittsnuus</div>
@@ -620,7 +668,49 @@ export default function App() {
               </div>
             )}
 
-            {/* Rediger profil */}
+            {/* Buddy-forespørsler */}
+            {buddyRequests.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={s.sectionTitle}>🤠 Snusbuddy-forespørsler ({buddyRequests.length})</div>
+                {buddyRequests.map(req => (
+                  <div key={req.id} style={s.buddyCard}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{req.fromName}</span>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button style={s.btnGreen} onClick={() => acceptBuddy(req)}>✓ Godta</button>
+                      <button style={s.btnRed} onClick={() => rejectBuddy(req)}>✗ Avvis</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Snusbuddies */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={s.sectionTitle}>Snusbuddies ({buddies.length})</div>
+              {buddies.length === 0 && <div style={{ color: "#444", fontSize: 13, marginBottom: 12 }}>Ingen Snusbuddies ennå</div>}
+              {buddies.map((b, i) => (
+                <div key={i} style={s.buddyCard}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>🤠 @{b.name}</span>
+                </div>
+              ))}
+
+              {/* Søk etter brukere */}
+              <div style={s.sectionTitle}>Finn Snusbuddies</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...s.input, marginTop: 0, flex: 1 }} placeholder="Søk brukernavn..." value={buddySearch} onChange={e => setBuddySearch(e.target.value)} onKeyDown={e => e.key === "Enter" && searchBuddies()} />
+                <button onClick={searchBuddies} style={{ ...s.btnSmall, marginTop: 0, padding: "0 16px" }}>Søk</button>
+              </div>
+              {buddyResults.map((u, i) => (
+                <div key={i} style={{ ...s.buddyCard, marginTop: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{u.displayName}</div>
+                    <div style={{ fontSize: 11, color: "#555" }}>{u.city ? `${u.city}, ` : ""}{u.country}</div>
+                  </div>
+                  <button style={s.btnSmall} onClick={() => sendBuddyRequest(u)}>+ Snusbuddy</button>
+                </div>
+              ))}
+            </div>
+
             {!editingProfile ? (
               <button style={s.btnOutline} onClick={() => setEditingProfile(true)}>Rediger profil</button>
             ) : (
@@ -635,14 +725,13 @@ export default function App() {
                 <span style={s.label}>Favorittsnuus</span>
                 <select style={s.select} value={profileForm.favoriteSnus || ""} onChange={e => setProfileForm({...profileForm, favoriteSnus: e.target.value})}>
                   <option value="">Velg favorittsnuus</option>
-                  {snusList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {snusList.map(sn => <option key={sn.id} value={sn.id}>{sn.name}</option>)}
                 </select>
                 <button style={s.btn} onClick={saveProfile}>Lagre</button>
                 <button style={s.btnOutline} onClick={() => setEditingProfile(false)}>Avbryt</button>
               </div>
             )}
 
-            {/* Mine vurderinger */}
             <div style={{ marginTop: 8 }}>
               <div style={s.sectionTitle}>Mine vurderinger</div>
               {myReviews.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center" }}>Du har ikke ratet noen snus ennå</div>}
