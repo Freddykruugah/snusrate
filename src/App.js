@@ -147,12 +147,10 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
   const [search, setSearch] = useState("");
   const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
   const [mode, setMode] = useState("match");
-
   const filtered = snusList.filter(s =>
     s.name?.toLowerCase().includes(search.toLowerCase()) ||
     s.brand?.toLowerCase().includes(search.toLowerCase())
   );
-
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
@@ -162,7 +160,6 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
     label: { fontSize: 10, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginTop: 16, display: "block", fontWeight: 700 },
     card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer" },
   };
-
   return (
     <div style={st.modal} onClick={onClose}>
       <div style={st.box} onClick={e => e.stopPropagation()}>
@@ -204,6 +201,116 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
   );
 }
 
+function UserProfileModal({ username, currentUser, currentDisplayName, onClose }) {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [requestSent, setRequestSent] = useState(false);
+  const [alreadyBuddy, setAlreadyBuddy] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const q = query(collection(db, "users"), where("displayNameLower", "==", username.toLowerCase()));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const data = { uid: snap.docs[0].id, ...snap.docs[0].data() };
+          setProfile(data);
+          // Sjekk om allerede buddies
+          const b1 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", currentUser.uid), where("toUid", "==", data.uid)));
+          const b2 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", data.uid), where("toUid", "==", currentUser.uid)));
+          if (!b1.empty || !b2.empty) setAlreadyBuddy(true);
+        }
+      } catch(e) {}
+      setLoading(false);
+    };
+    load();
+  }, [username, currentUser.uid]);
+
+  const sendRequest = async () => {
+    if (!profile) return;
+    try {
+      await addDoc(collection(db, "buddy_requests"), {
+        fromUid: currentUser.uid, fromName: currentDisplayName,
+        toUid: profile.uid, toName: profile.displayName,
+        status: "pending", createdAt: new Date().toISOString()
+      });
+      setRequestSent(true);
+    } catch(e) {}
+  };
+
+  const st = {
+    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
+    box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
+    btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
+    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+    statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", textAlign: "center", flex: 1 },
+  };
+
+  return (
+    <div style={st.modal} onClick={onClose}>
+      <div style={st.box} onClick={e => e.stopPropagation()}>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Laster...</div>
+        ) : !profile ? (
+          <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Bruker ikke funnet</div>
+        ) : (
+          <>
+            <div style={{ textAlign: "center", paddingBottom: 20 }}>
+              <div style={{ fontSize: 48, marginBottom: 10 }}>🤠</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
+              <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                {profile.city ? `${profile.city}, ` : ""}{profile.country}
+                {profile.age ? ` · ${profile.age} år` : ""}
+                {profile.gender ? ` · ${profile.gender}` : ""}
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
+                <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{getRatingTitle(profile.reviewCount || 0)}</span>
+                {getProductTitle(profile.approvedProducts || 0) && <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{getProductTitle(profile.approvedProducts || 0)}</span>}
+              </div>
+            </div>
+            {username !== currentDisplayName && (
+              alreadyBuddy ? (
+                <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>🤠 Dere er Snusbuddies!</div>
+              ) : requestSent ? (
+                <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>✅ Forespørsel sendt!</div>
+              ) : (
+                <button style={st.btn} onClick={sendRequest}>🤠 Send Snusbuddy-forespørsel</button>
+              )
+            )}
+            <button style={st.btnOutline} onClick={onClose}>Lukk</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
+  const st = {
+    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
+    box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
+    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+    buddyCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 12 },
+  };
+  return (
+    <div style={st.modal} onClick={onClose}>
+      <div style={st.box} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>🤠 Snusbuddies ({buddies.length})</div>
+        {buddies.length === 0 && <div style={{ color: "#555", fontSize: 13, textAlign: "center", padding: 20 }}>Ingen Snusbuddies ennå</div>}
+        {buddies.map((b, i) => (
+          <div key={i} style={st.buddyCard} onClick={() => onSelectBuddy(b.name)}>
+            <div style={{ fontSize: 28 }}>🤠</div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>@{b.name}</div>
+            </div>
+          </div>
+        ))}
+        <button style={st.btnOutline} onClick={onClose}>Lukk</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState("explore");
@@ -237,6 +344,8 @@ export default function App() {
   const [buddyRequests, setBuddyRequests] = useState([]);
   const [buddies, setBuddies] = useState([]);
   const [notifCount, setNotifCount] = useState(0);
+  const [viewingUser, setViewingUser] = useState(null);
+  const [showBuddyList, setShowBuddyList] = useState(false);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -310,7 +419,8 @@ export default function App() {
   const searchBuddies = async () => {
     if (!buddySearch.trim()) return;
     try {
-      const q = query(collection(db, "users"), where("displayName", ">=", buddySearch), where("displayName", "<=", buddySearch + "\uf8ff"));
+      const searchLower = buddySearch.toLowerCase();
+      const q = query(collection(db, "users"), where("displayNameLower", ">=", searchLower), where("displayNameLower", "<=", searchLower + "\uf8ff"));
       const snap = await getDocs(q);
       setBuddyResults(snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => u.uid !== user.uid));
     } catch(e) {}
@@ -344,7 +454,11 @@ export default function App() {
 
   const saveProfile = async () => {
     if (!user) return;
-    await setDoc(doc(db, "users", user.uid), { ...profileForm, displayName }, { merge: true });
+    await setDoc(doc(db, "users", user.uid), {
+      ...profileForm,
+      displayName,
+      displayNameLower: displayName.toLowerCase()
+    }, { merge: true });
     setUserProfile({ ...profileForm, displayName });
     setEditingProfile(false);
   };
@@ -358,7 +472,12 @@ export default function App() {
         if (!gender) { alert("Velg kjønn!"); return; }
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
-        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), age: ageNum, gender, country, city, favoriteSnus: "", approvedProducts: 0 });
+        await setDoc(doc(db, "users", result.user.uid), {
+          displayName: username.trim(),
+          displayNameLower: username.trim().toLowerCase(),
+          age: ageNum, gender, country, city,
+          favoriteSnus: "", approvedProducts: 0
+        });
         setUser({ ...result.user, displayName: username.trim() });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -458,7 +577,7 @@ export default function App() {
     sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
     pendingCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
     reviewCard: { background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 8, padding: "12px 14px", marginBottom: 8 },
-    statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", textAlign: "center", flex: 1 },
+    statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", textAlign: "center", flex: 1, cursor: "pointer" },
     buddyCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" },
   };
 
@@ -513,6 +632,21 @@ export default function App() {
             <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 12 }}>Strekkode koblet!</div>
           </div>
         </div>
+      )}
+      {viewingUser && (
+        <UserProfileModal
+          username={viewingUser}
+          currentUser={user}
+          currentDisplayName={displayName}
+          onClose={() => setViewingUser(null)}
+        />
+      )}
+      {showBuddyList && (
+        <BuddyListModal
+          buddies={buddies}
+          onSelectBuddy={(name) => { setShowBuddyList(false); setViewingUser(name); }}
+          onClose={() => setShowBuddyList(false)}
+        />
       )}
 
       <div style={s.header}>
@@ -569,12 +703,15 @@ export default function App() {
             <div style={s.sectionTitle}>Siste vurderinger ({allReviews.length})</div>
             {allReviews.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center", marginTop: 40 }}>Ingen vurderinger ennå</div>}
             {allReviews.map((r, i) => (
-              <div key={i} style={{ ...s.reviewCard, cursor: "pointer" }} onClick={() => openSnusFromReview(r)}>
+              <div key={i} style={s.reviewCard}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{r.user}</span>
+                    <span
+                      style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }}
+                      onClick={() => r.user !== displayName && setViewingUser(r.user)}
+                    >@{r.user}</span>
                     <span style={{ fontSize: 12, color: "#555" }}> ratet </span>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{r.snusName}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, cursor: "pointer" }} onClick={() => openSnusFromReview(r)}>{r.snusName}</span>
                   </div>
                   <span style={{ fontSize: 10, color: "#333" }}>{formatDate(r.date)}</span>
                 </div>
@@ -614,7 +751,7 @@ export default function App() {
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || "ukjent"}</div>
               {userProfile && (
                 <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                  {userProfile.city && userProfile.country ? `${userProfile.city}, ${userProfile.country}` : userProfile.country || ""}
+                  {userProfile.city ? `${userProfile.city}, ` : ""}{userProfile.country}
                   {userProfile.age ? ` · ${userProfile.age} år` : ""}
                   {userProfile.gender ? ` · ${userProfile.gender}` : ""}
                 </div>
@@ -635,7 +772,7 @@ export default function App() {
                 <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{myAvgRating}</div>
                 <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Snitt gitt</div>
               </div>
-              <div style={s.statBox}>
+              <div style={{ ...s.statBox }} onClick={() => setShowBuddyList(true)}>
                 <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{buddies.length}</div>
                 <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Buddies</div>
               </div>
@@ -657,7 +794,7 @@ export default function App() {
                 <div style={s.sectionTitle}>🤠 Snusbuddy-forespørsler ({buddyRequests.length})</div>
                 {buddyRequests.map(req => (
                   <div key={req.id} style={s.buddyCard}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{req.fromName}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }} onClick={() => setViewingUser(req.fromName)}>@{req.fromName}</span>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button style={s.btnGreen} onClick={() => acceptBuddy(req)}>✓ Godta</button>
                       <button style={s.btnRed} onClick={() => rejectBuddy(req)}>✗ Avvis</button>
@@ -668,21 +805,14 @@ export default function App() {
             )}
 
             <div style={{ marginBottom: 20 }}>
-              <div style={s.sectionTitle}>Snusbuddies ({buddies.length})</div>
-              {buddies.length === 0 && <div style={{ color: "#444", fontSize: 13, marginBottom: 12 }}>Ingen Snusbuddies ennå</div>}
-              {buddies.map((b, i) => (
-                <div key={i} style={s.buddyCard}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>🤠 @{b.name}</span>
-                </div>
-              ))}
-              <div style={{ ...s.sectionTitle, marginTop: 16 }}>Finn Snusbuddies</div>
+              <div style={s.sectionTitle}>Finn Snusbuddies</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input style={{ ...s.input, marginTop: 0, flex: 1 }} placeholder="Søk brukernavn..." value={buddySearch} onChange={e => setBuddySearch(e.target.value)} onKeyDown={e => e.key === "Enter" && searchBuddies()} />
                 <button onClick={searchBuddies} style={{ ...s.btnSmall, padding: "0 16px" }}>Søk</button>
               </div>
               {buddyResults.map((u, i) => (
                 <div key={i} style={{ ...s.buddyCard, marginTop: 8 }}>
-                  <div>
+                  <div style={{ cursor: "pointer" }} onClick={() => setViewingUser(u.displayName)}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{u.displayName}</div>
                     <div style={{ fontSize: 11, color: "#555" }}>{u.city ? `${u.city}, ` : ""}{u.country}</div>
                   </div>
@@ -770,11 +900,14 @@ export default function App() {
             </div>
             {selectedSnus.reviews?.length > 0 && (
               <>
-                <div style={{ ...s.sectionTitle, marginTop: 8 }}>Anmeldelser</div>
+                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 }}>Anmeldelser</div>
                 {[...selectedSnus.reviews].reverse().map((r, i) => (
                   <div key={i} style={s.reviewCard}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{r.user}</span>
+                      <span
+                        style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }}
+                        onClick={() => r.user !== displayName && setViewingUser(r.user)}
+                      >@{r.user}</span>
                       <span style={{ fontSize: 10, color: "#333" }}>{formatDateFull(r.date)}</span>
                     </div>
                     <StarRating value={r.rating} size={13} />
@@ -786,7 +919,7 @@ export default function App() {
             <div style={{ borderTop: "1px solid #1e1e1e", marginTop: 20, paddingTop: 20 }}>
               {!submitted ? (
                 <>
-                  <div style={s.sectionTitle}>Din anmeldelse</div>
+                  <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 }}>Din anmeldelse</div>
                   <div style={{ display: "flex", justifyContent: "center", margin: "16px 0" }}>
                     <StarRating value={userRating} onChange={setUserRating} size={40} />
                   </div>
