@@ -11,7 +11,7 @@ function ChiliStrength({ value }) {
   return (
     <span style={{ fontSize: 12 }}>
       {[1,2,3,4,5].map(i => (
-        <span key={i} style={{ opacity: i <= count ? 1 : 0.2 }}>🌶️</span>
+        <span key={i} style={{ opacity: i <= count ? 1 : 0.2 }}>🔥</span>
       ))}
     </span>
   );
@@ -159,7 +159,7 @@ export default function App() {
           border: value === String(i) ? "1px solid #e8b84b" : "1px solid #333",
           borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 14
         }}>
-          {"🌶️".repeat(i)}
+          {"🔥".repeat(i)}
         </button>
       ))}
     </div>
