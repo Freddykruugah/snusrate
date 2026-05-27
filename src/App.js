@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
+
+const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
 function StarRating({ value, onChange, size = 20 }) {
   const [hover, setHover] = useState(0);
@@ -25,6 +27,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [authMode, setAuthMode] = useState("login");
   const [snusList, setSnusList] = useState([]);
+  const [pendingList, setPendingList] = useState([]);
   const [selectedSnus, setSelectedSnus] = useState(null);
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -32,16 +35,30 @@ export default function App() {
   const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "Normal" });
   const [addSubmitted, setAddSubmitted] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "Normal" });
+
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
   useEffect(() => {
     onAuthStateChanged(auth, u => setUser(u));
     fetchSnus();
   }, []);
 
+  useEffect(() => {
+    if (isAdmin) fetchPending();
+  }, [isAdmin]);
+
   const fetchSnus = async () => {
-    const q = query(collection(db, "snus"), orderBy("avgRating", "desc"));
-    const snap = await getDocs(q);
-    setSnusList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    try {
+      const q = query(collection(db, "snus"), orderBy("avgRating", "desc"));
+      const snap = await getDocs(q);
+      setSnusList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) {}
+  };
+
+  const fetchPending = async () => {
+    const snap = await getDocs(collection(db, "snus_pending"));
+    setPendingList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   const handleAuth = async () => {
@@ -73,22 +90,53 @@ export default function App() {
     setAddSubmitted(true);
   };
 
+  const adminAddSnus = async () => {
+    if (!adminNewSnus.name || !adminNewSnus.brand) return;
+    await addDoc(collection(db, "snus"), {
+      ...adminNewSnus,
+      avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [],
+      createdAt: new Date().toISOString()
+    });
+    setAdminNewSnus({ name: "", brand: "", type: "", strength: "Normal" });
+    fetchSnus();
+    alert("Snus lagt til!");
+  };
+
+  const approvePending = async (item) => {
+    await addDoc(collection(db, "snus"), {
+      name: item.name, brand: item.brand, type: item.type, strength: item.strength,
+      avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [],
+      createdAt: new Date().toISOString()
+    });
+    await deleteDoc(doc(db, "snus_pending", item.id));
+    fetchPending();
+    fetchSnus();
+  };
+
+  const rejectPending = async (id) => {
+    await deleteDoc(doc(db, "snus_pending", id));
+    fetchPending();
+  };
+
   const s = {
     app: { fontFamily: "'Georgia', serif", background: "#0f0f0f", minHeight: "100vh", color: "#e8e0d0", maxWidth: 420, margin: "0 auto" },
     header: { background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "16px 20px 12px", position: "sticky", top: 0, zIndex: 10 },
     logo: { fontSize: 22, fontWeight: 700, color: "#e8b84b" },
     logoSub: { fontSize: 10, letterSpacing: 3, color: "#666", textTransform: "uppercase" },
-    nav: { display: "flex", borderBottom: "1px solid #1e1e1e", background: "#111" },
-    navBtn: (a) => ({ flex: 1, padding: "12px 4px", background: "none", border: "none", color: a ? "#e8b84b" : "#555", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent" }),
+    nav: { display: "flex", borderBottom: "1px solid #1e1e1e", background: "#111", overflowX: "auto" },
+    navBtn: (a) => ({ flex: 1, padding: "12px 4px", background: "none", border: "none", color: a ? "#e8b84b" : "#555", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent", whiteSpace: "nowrap" }),
     content: { padding: 16 },
     card: { background: "#161616", border: "1px solid #222", borderRadius: 8, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
     btn: { background: "#e8b84b", color: "#0f0f0f", border: "none", borderRadius: 6, padding: "11px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 6, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 8 },
+    btnGreen: { background: "#4a7c59", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginRight: 8 },
+    btnRed: { background: "#b03a3a", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer" },
     input: { width: "100%", background: "#0f0f0f", border: "1px solid #2a2a2a", borderRadius: 6, padding: "10px 12px", color: "#e8e0d0", fontSize: 13, marginTop: 8, boxSizing: "border-box", fontFamily: "inherit" },
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", alignItems: "flex-end" },
     modalBox: { background: "#161616", border: "1px solid #2a2a2a", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 420, margin: "0 auto", padding: "24px 20px 32px", maxHeight: "85vh", overflowY: "auto" },
     label: { fontSize: 11, letterSpacing: 1.5, color: "#666", textTransform: "uppercase", marginTop: 14, display: "block" },
     sectionTitle: { fontSize: 11, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 },
+    pendingCard: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
   };
 
   if (!user) return (
@@ -118,35 +166,37 @@ export default function App() {
         </div>
       </div>
       <div style={s.nav}>
-        {[["explore","Utforsk"],["topp","Topp 10"],["profil","Profil"]].map(([k,l]) => (
+        {[["explore","Utforsk"],["topp","Topp 10"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
           <button key={k} style={s.navBtn(tab===k)} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
       <div style={s.content}>
+
         {tab === "explore" && (
           <>
-            <div style={s.sectionTitle}>Alle snus</div>
-            {snusList.length === 0 && <div style={{ color: "#555", fontSize: 13 }}>Ingen snus lagt til ennå. Vær den første!</div>}
+            <div style={s.sectionTitle}>Alle snus ({snusList.length})</div>
+            {snusList.length === 0 && <div style={{ color: "#555", fontSize: 13 }}>Ingen snus lagt til ennå.</div>}
             {snusList.map(snus => (
               <div key={snus.id} style={s.card} onClick={() => { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }}>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{snus.name}</div>
-                <div style={{ fontSize: 12, color: "#777" }}>{snus.brand} · {snus.type}</div>
+                <div style={{ fontSize: 12, color: "#777" }}>{snus.brand} · {snus.type} · {snus.strength}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                   <StarRating value={Math.round(snus.avgRating || 0)} size={13} />
                   <span style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</span>
-                  <span style={{ fontSize: 11, color: "#555" }}>({snus.totalRatings || 0})</span>
+                  <span style={{ fontSize: 11, color: "#555" }}>({snus.totalRatings || 0} ratings)</span>
                 </div>
               </div>
             ))}
             <button style={s.btn} onClick={() => { setShowAddForm(true); setAddSubmitted(false); }}>+ Foreslå ny snus</button>
           </>
         )}
+
         {tab === "topp" && (
           <>
             <div style={s.sectionTitle}>Høyest rated</div>
             {snusList.map((snus, i) => (
               <div key={snus.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: 18, fontWeight: 900, color: "#333", width: 28, textAlign: "center" }}>{i+1}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: i < 3 ? "#e8b84b" : "#333", width: 28, textAlign: "center" }}>{i+1}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
                   <div style={{ fontSize: 11, color: "#666" }}>{snus.brand}</div>
@@ -159,12 +209,44 @@ export default function App() {
             ))}
           </>
         )}
+
         {tab === "profil" && (
           <div style={{ textAlign: "center", padding: "40px 0" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🤠</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b" }}>{user.email}</div>
-            <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>Velkommen til SnusRate!</div>
+            {isAdmin && <div style={{ fontSize: 11, color: "#e8b84b", marginTop: 4, letterSpacing: 2 }}>ADMIN</div>}
           </div>
+        )}
+
+        {tab === "admin" && isAdmin && (
+          <>
+            <div style={s.sectionTitle}>Legg til ny snus direkte</div>
+            <span style={s.label}>Produktnavn</span>
+            <input style={s.input} placeholder="f.eks. General White" value={adminNewSnus.name} onChange={e => setAdminNewSnus({...adminNewSnus, name: e.target.value})} />
+            <span style={s.label}>Merke</span>
+            <input style={s.input} placeholder="f.eks. Swedish Match" value={adminNewSnus.brand} onChange={e => setAdminNewSnus({...adminNewSnus, brand: e.target.value})} />
+            <span style={s.label}>Type</span>
+            <input style={s.input} placeholder="f.eks. White Portion" value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})} />
+            <span style={s.label}>Styrke</span>
+            <select style={s.input} value={adminNewSnus.strength} onChange={e => setAdminNewSnus({...adminNewSnus, strength: e.target.value})}>
+              <option>Normal</option><option>Sterk</option><option>Extrem</option>
+            </select>
+            <button style={s.btn} onClick={adminAddSnus}>+ Legg til snus</button>
+
+            <div style={{ ...s.sectionTitle, marginTop: 28 }}>Til godkjenning ({pendingList.length})</div>
+            {pendingList.length === 0 && <div style={{ color: "#555", fontSize: 13 }}>Ingen ventende forslag.</div>}
+            {pendingList.map(item => (
+              <div key={item.id} style={s.pendingCard}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
+                <div style={{ fontSize: 12, color: "#666", marginBottom: 10 }}>{item.brand} · {item.type} · {item.strength}</div>
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 10 }}>Fra: {item.submittedBy}</div>
+                <div>
+                  <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Godkjenn</button>
+                  <button style={s.btnRed} onClick={() => rejectPending(item.id)}>✗ Avvis</button>
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
 
@@ -172,7 +254,7 @@ export default function App() {
         <div style={s.modal} onClick={() => setSelectedSnus(null)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 16 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 16 }}>{selectedSnus.brand} · {selectedSnus.type} · {selectedSnus.strength}</div>
             {!submitted ? (
               <>
                 <span style={s.label}>Din rating</span>
