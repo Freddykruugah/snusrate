@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
@@ -37,6 +37,7 @@ export default function App() {
   const [tab, setTab] = useState("explore");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [authMode, setAuthMode] = useState("login");
   const [snusList, setSnusList] = useState([]);
   const [pendingList, setPendingList] = useState([]);
@@ -76,7 +77,10 @@ export default function App() {
   const handleAuth = async () => {
     try {
       if (authMode === "register") {
-        await createUserWithEmailAndPassword(auth, email, password);
+        if (!username.trim()) { alert("Velg et brukernavn!"); return; }
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(result.user, { displayName: username.trim() });
+        setUser({ ...result.user, displayName: username.trim() });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -85,9 +89,15 @@ export default function App() {
 
   const submitReview = async () => {
     if (!userRating || !selectedSnus) return;
+    const displayName = user.displayName || user.email;
     const snusRef = doc(db, "snus", selectedSnus.id);
     await updateDoc(snusRef, {
-      reviews: arrayUnion({ user: user.email, rating: userRating, text: reviewText, date: new Date().toISOString() }),
+      reviews: arrayUnion({ 
+        user: displayName, 
+        rating: userRating, 
+        text: reviewText, 
+        date: new Date().toISOString() 
+      }),
       totalRatings: (selectedSnus.totalRatings || 0) + 1,
       totalScore: (selectedSnus.totalScore || 0) + userRating,
       avgRating: ((selectedSnus.totalScore || 0) + userRating) / ((selectedSnus.totalRatings || 0) + 1),
@@ -98,7 +108,7 @@ export default function App() {
 
   const submitNewSnus = async () => {
     if (!newSnus.name || !newSnus.brand) return;
-    await addDoc(collection(db, "snus_pending"), { ...newSnus, submittedBy: user.email, approved: false, createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus_pending"), { ...newSnus, submittedBy: user.displayName || user.email, approved: false, createdAt: new Date().toISOString() });
     setAddSubmitted(true);
   };
 
@@ -149,10 +159,11 @@ export default function App() {
     label: { fontSize: 11, letterSpacing: 1.5, color: "#666", textTransform: "uppercase", marginTop: 14, display: "block" },
     sectionTitle: { fontSize: 11, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 },
     pendingCard: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
+    reviewCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, padding: "10px 12px", marginBottom: 8 },
   };
 
   const StrengthSelector = ({ value, onChange }) => (
-    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
       {[1,2,3,4,5].map(i => (
         <button key={i} onClick={() => onChange(String(i))} style={{
           background: value === String(i) ? "#2a2a2a" : "none",
@@ -165,12 +176,23 @@ export default function App() {
     </div>
   );
 
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
   if (!user) return (
     <div style={s.app}>
       <div style={s.header}><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
       <div style={s.content}>
         <div style={{ textAlign: "center", padding: "40px 0 20px", fontSize: 40 }}>🤠</div>
         <div style={{ ...s.sectionTitle, textAlign: "center" }}>{authMode === "login" ? "Logg inn" : "Registrer deg"}</div>
+        {authMode === "register" && (
+          <>
+            <span style={s.label}>Brukernavn</span>
+            <input style={s.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="f.eks. SnusKongen_Oslo" />
+          </>
+        )}
         <span style={s.label}>E-post</span>
         <input style={s.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="din@epost.no" />
         <span style={s.label}>Passord</span>
@@ -241,7 +263,8 @@ export default function App() {
         {tab === "profil" && (
           <div style={{ textAlign: "center", padding: "40px 0" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🤠</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b" }}>{user.email}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || user.email}</div>
+            <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{user.email}</div>
             {isAdmin && <div style={{ fontSize: 11, color: "#e8b84b", marginTop: 4, letterSpacing: 2 }}>ADMIN</div>}
           </div>
         )}
@@ -283,14 +306,37 @@ export default function App() {
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
             <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
             <ChiliStrength value={selectedSnus.strength} />
-            <div style={{ marginTop: 16 }}>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
+              <StarRating value={Math.round(selectedSnus.avgRating || 0)} size={18} />
+              <span style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
+              <span style={{ fontSize: 12, color: "#555" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
+            </div>
+
+            {/* Anmeldelser */}
+            {selectedSnus.reviews && selectedSnus.reviews.length > 0 && (
+              <>
+                <div style={{ ...s.sectionTitle, marginTop: 16 }}>Anmeldelser</div>
+                {[...selectedSnus.reviews].reverse().map((r, i) => (
+                  <div key={i} style={s.reviewCard}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{r.user}</span>
+                      <span style={{ fontSize: 10, color: "#444" }}>{formatDate(r.date)}</span>
+                    </div>
+                    <StarRating value={r.rating} size={12} />
+                    {r.text && <div style={{ fontSize: 13, color: "#bbb", marginTop: 6 }}>{r.text}</div>}
+                  </div>
+                ))}
+              </>
+            )}
+
+            <div style={{ borderTop: "1px solid #222", marginTop: 16, paddingTop: 16 }}>
               {!submitted ? (
                 <>
-                  <span style={s.label}>Din rating</span>
+                  <div style={s.sectionTitle}>Skriv din anmeldelse</div>
                   <div style={{ display: "flex", justifyContent: "center", margin: "12px 0" }}>
                     <StarRating value={userRating} onChange={setUserRating} size={36} />
                   </div>
-                  <span style={s.label}>Anmeldelse</span>
                   <textarea style={{ ...s.input, resize: "vertical", minHeight: 80 }} placeholder="Hva synes du?" value={reviewText} onChange={e => setReviewText(e.target.value)} />
                   <button style={s.btn} onClick={submitReview}>Send inn</button>
                   <button style={s.btnOutline} onClick={() => setSelectedSnus(null)}>Lukk</button>
