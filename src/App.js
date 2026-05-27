@@ -5,6 +5,18 @@ import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
+function ChiliStrength({ value }) {
+  const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
+  const count = levels[value] || 3;
+  return (
+    <span style={{ fontSize: 12 }}>
+      {[1,2,3,4,5].map(i => (
+        <span key={i} style={{ opacity: i <= count ? 1 : 0.2 }}>🌶️</span>
+      ))}
+    </span>
+  );
+}
+
 function StarRating({ value, onChange, size = 20 }) {
   const [hover, setHover] = useState(0);
   return (
@@ -32,10 +44,10 @@ export default function App() {
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "Normal" });
+  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
   const [addSubmitted, setAddSubmitted] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "Normal" });
+  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
@@ -97,7 +109,7 @@ export default function App() {
       avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [],
       createdAt: new Date().toISOString()
     });
-    setAdminNewSnus({ name: "", brand: "", type: "", strength: "Normal" });
+    setAdminNewSnus({ name: "", brand: "", type: "", strength: "3" });
     fetchSnus();
     alert("Snus lagt til!");
   };
@@ -139,6 +151,20 @@ export default function App() {
     pendingCard: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
   };
 
+  const StrengthSelector = ({ value, onChange }) => (
+    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+      {[1,2,3,4,5].map(i => (
+        <button key={i} onClick={() => onChange(String(i))} style={{
+          background: value === String(i) ? "#2a2a2a" : "none",
+          border: value === String(i) ? "1px solid #e8b84b" : "1px solid #333",
+          borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 14
+        }}>
+          {"🌶️".repeat(i)}
+        </button>
+      ))}
+    </div>
+  );
+
   if (!user) return (
     <div style={s.app}>
       <div style={s.header}><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
@@ -179,7 +205,8 @@ export default function App() {
             {snusList.map(snus => (
               <div key={snus.id} style={s.card} onClick={() => { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }}>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{snus.name}</div>
-                <div style={{ fontSize: 12, color: "#777" }}>{snus.brand} · {snus.type} · {snus.strength}</div>
+                <div style={{ fontSize: 12, color: "#777", marginBottom: 4 }}>{snus.brand} · {snus.type}</div>
+                <ChiliStrength value={snus.strength} />
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                   <StarRating value={Math.round(snus.avgRating || 0)} size={13} />
                   <span style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</span>
@@ -199,7 +226,8 @@ export default function App() {
                 <div style={{ fontSize: 18, fontWeight: 900, color: i < 3 ? "#e8b84b" : "#333", width: 28, textAlign: "center" }}>{i+1}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
-                  <div style={{ fontSize: 11, color: "#666" }}>{snus.brand}</div>
+                  <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>{snus.brand}</div>
+                  <ChiliStrength value={snus.strength} />
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</div>
@@ -228,18 +256,17 @@ export default function App() {
             <span style={s.label}>Type</span>
             <input style={s.input} placeholder="f.eks. White Portion" value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})} />
             <span style={s.label}>Styrke</span>
-            <select style={s.input} value={adminNewSnus.strength} onChange={e => setAdminNewSnus({...adminNewSnus, strength: e.target.value})}>
-              <option>Normal</option><option>Sterk</option><option>Extrem</option>
-            </select>
-            <button style={s.btn} onClick={adminAddSnus}>+ Legg til snus</button>
+            <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
+            <button style={{ ...s.btn, marginTop: 16 }} onClick={adminAddSnus}>+ Legg til snus</button>
 
             <div style={{ ...s.sectionTitle, marginTop: 28 }}>Til godkjenning ({pendingList.length})</div>
             {pendingList.length === 0 && <div style={{ color: "#555", fontSize: 13 }}>Ingen ventende forslag.</div>}
             {pendingList.map(item => (
               <div key={item.id} style={s.pendingCard}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
-                <div style={{ fontSize: 12, color: "#666", marginBottom: 10 }}>{item.brand} · {item.type} · {item.strength}</div>
-                <div style={{ fontSize: 11, color: "#555", marginBottom: 10 }}>Fra: {item.submittedBy}</div>
+                <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{item.brand} · {item.type}</div>
+                <ChiliStrength value={item.strength} />
+                <div style={{ fontSize: 11, color: "#555", margin: "8px 0" }}>Fra: {item.submittedBy}</div>
                 <div>
                   <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Godkjenn</button>
                   <button style={s.btnRed} onClick={() => rejectPending(item.id)}>✗ Avvis</button>
@@ -254,25 +281,28 @@ export default function App() {
         <div style={s.modal} onClick={() => setSelectedSnus(null)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 16 }}>{selectedSnus.brand} · {selectedSnus.type} · {selectedSnus.strength}</div>
-            {!submitted ? (
-              <>
-                <span style={s.label}>Din rating</span>
-                <div style={{ display: "flex", justifyContent: "center", margin: "12px 0" }}>
-                  <StarRating value={userRating} onChange={setUserRating} size={36} />
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
+            <ChiliStrength value={selectedSnus.strength} />
+            <div style={{ marginTop: 16 }}>
+              {!submitted ? (
+                <>
+                  <span style={s.label}>Din rating</span>
+                  <div style={{ display: "flex", justifyContent: "center", margin: "12px 0" }}>
+                    <StarRating value={userRating} onChange={setUserRating} size={36} />
+                  </div>
+                  <span style={s.label}>Anmeldelse</span>
+                  <textarea style={{ ...s.input, resize: "vertical", minHeight: 80 }} placeholder="Hva synes du?" value={reviewText} onChange={e => setReviewText(e.target.value)} />
+                  <button style={s.btn} onClick={submitReview}>Send inn</button>
+                  <button style={s.btnOutline} onClick={() => setSelectedSnus(null)}>Lukk</button>
+                </>
+              ) : (
+                <div style={{ textAlign: "center", padding: "20px 0" }}>
+                  <div style={{ fontSize: 40 }}>✅</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 8 }}>Rating lagret!</div>
+                  <button style={{ ...s.btn, marginTop: 20 }} onClick={() => setSelectedSnus(null)}>Tilbake</button>
                 </div>
-                <span style={s.label}>Anmeldelse</span>
-                <textarea style={{ ...s.input, resize: "vertical", minHeight: 80 }} placeholder="Hva synes du?" value={reviewText} onChange={e => setReviewText(e.target.value)} />
-                <button style={s.btn} onClick={submitReview}>Send inn</button>
-                <button style={s.btnOutline} onClick={() => setSelectedSnus(null)}>Lukk</button>
-              </>
-            ) : (
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <div style={{ fontSize: 40 }}>✅</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 8 }}>Rating lagret!</div>
-                <button style={{ ...s.btn, marginTop: 20 }} onClick={() => setSelectedSnus(null)}>Tilbake</button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -291,10 +321,8 @@ export default function App() {
                 <span style={s.label}>Type</span>
                 <input style={s.input} placeholder="f.eks. White Dry" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
                 <span style={s.label}>Styrke</span>
-                <select style={s.input} value={newSnus.strength} onChange={e => setNewSnus({...newSnus, strength: e.target.value})}>
-                  <option>Normal</option><option>Sterk</option><option>Extrem</option>
-                </select>
-                <button style={s.btn} onClick={submitNewSnus}>Send til admin</button>
+                <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
+                <button style={{ ...s.btn, marginTop: 16 }} onClick={submitNewSnus}>Send til admin</button>
                 <button style={s.btnOutline} onClick={() => setShowAddForm(false)}>Avbryt</button>
               </>
             ) : (
