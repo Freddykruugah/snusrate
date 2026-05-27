@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
@@ -10,9 +10,7 @@ function FlameStrength({ value }) {
   const count = levels[value] || 3;
   return (
     <span style={{ fontSize: 12 }}>
-      {[1,2,3,4,5].map(i => (
-        <span key={i} style={{ opacity: i <= count ? 1 : 0.15 }}>🔥</span>
-      ))}
+      {[1,2,3,4,5].map(i => <span key={i} style={{ opacity: i <= count ? 1 : 0.15 }}>🔥</span>)}
     </span>
   );
 }
@@ -48,8 +46,64 @@ function StrengthSelector({ value, onChange }) {
 
 const formatDate = (iso) => {
   const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return "akkurat nå";
+  if (diff < 3600) return `${Math.floor(diff/60)}m siden`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}t siden`;
+  return `${Math.floor(diff/86400)}d siden`;
+};
+
+const formatDateFull = (iso) => {
+  const d = new Date(iso);
   return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
+
+function LiveTicker({ allReviews, onClickReview }) {
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (allReviews.length === 0) return;
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIndex(i => (i + 1) % allReviews.length);
+        setVisible(true);
+      }, 400);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [allReviews.length]);
+
+  if (allReviews.length === 0) return null;
+  const r = allReviews[index];
+
+  return (
+    <div onClick={() => onClickReview(r)} style={{
+      background: "#111",
+      border: "1px solid #1e1e1e",
+      borderRadius: 8,
+      padding: "10px 14px",
+      marginBottom: 14,
+      cursor: "pointer",
+      opacity: visible ? 1 : 0,
+      transition: "opacity 0.3s",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+    }}>
+      <div style={{ fontSize: 18 }}>🔴</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: "#e8b84b", fontWeight: 700 }}>
+          @{r.user} ratet <span style={{ color: "#e8e0d0" }}>{r.snusName}</span>
+        </div>
+        <div style={{ fontSize: 11, color: "#555", marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+          {"★".repeat(r.rating)}{"☆".repeat(5-r.rating)} · {formatDate(r.date)}
+          {r.text && <span style={{ color: "#666" }}>· "{r.text.slice(0,30)}{r.text.length > 30 ? "..." : ""}"</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -72,6 +126,11 @@ export default function App() {
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
+
+  // Samle alle reviews på tvers av alle snus
+  const allReviews = snusList.flatMap(s =>
+    (s.reviews || []).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
+  ).sort((a, b) => new Date(b.date) - new Date(a.date));
 
   useEffect(() => {
     onAuthStateChanged(auth, u => setUser(u));
@@ -143,6 +202,11 @@ export default function App() {
 
   const rejectPending = async (id) => { await deleteDoc(doc(db, "snus_pending", id)); fetchPending(); };
 
+  const openSnusFromReview = (review) => {
+    const snus = snusList.find(s => s.id === review.snusId);
+    if (snus) { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }
+  };
+
   const filtered = snusList.filter(s =>
     s.name?.toLowerCase().includes(search.toLowerCase()) ||
     s.brand?.toLowerCase().includes(search.toLowerCase())
@@ -154,9 +218,9 @@ export default function App() {
     logo: { fontSize: 24, fontWeight: 700, color: "#e8b84b", letterSpacing: -0.5 },
     logoSub: { fontSize: 9, letterSpacing: 3.5, color: "#555", textTransform: "uppercase", marginTop: 1 },
     nav: { display: "flex", borderBottom: "1px solid #1a1a1a", background: "#0f0f0f", overflowX: "auto" },
-    navBtn: (a) => ({ flex: 1, padding: "13px 4px", background: "none", border: "none", color: a ? "#e8b84b" : "#444", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent", whiteSpace: "nowrap", transition: "color 0.15s" }),
+    navBtn: (a) => ({ flex: 1, padding: "12px 2px", background: "none", border: "none", color: a ? "#e8b84b" : "#444", fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent", whiteSpace: "nowrap", transition: "color 0.15s" }),
     content: { padding: "16px 16px 80px" },
-    card: { background: "#141414", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer", transition: "border-color 0.15s" },
+    card: { background: "#141414", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
     btnGreen: { background: "#2d5a3d", color: "#7ecb96", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginRight: 8 },
@@ -211,14 +275,16 @@ export default function App() {
       </div>
 
       <div style={s.nav}>
-        {[["explore","Utforsk"],["topp","Topp 10"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
+        {[["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
           <button key={k} style={s.navBtn(tab===k)} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
 
       <div style={s.content}>
+
         {tab === "explore" && (
           <>
+            <LiveTicker allReviews={allReviews} onClickReview={openSnusFromReview} />
             <input style={s.searchBox} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
             <div style={s.sectionTitle}>Alle snus ({filtered.length})</div>
             {filtered.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center", marginTop: 40 }}>Ingen snus funnet</div>}
@@ -238,6 +304,27 @@ export default function App() {
               </div>
             ))}
             <button style={s.btn} onClick={() => { setShowAddForm(true); setAddSubmitted(false); }}>+ Foreslå ny snus</button>
+          </>
+        )}
+
+        {tab === "vurderinger" && (
+          <>
+            <div style={s.sectionTitle}>Siste vurderinger ({allReviews.length})</div>
+            {allReviews.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center", marginTop: 40 }}>Ingen vurderinger ennå</div>}
+            {allReviews.map((r, i) => (
+              <div key={i} style={{ ...s.reviewCard, cursor: "pointer" }} onClick={() => openSnusFromReview(r)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{r.user}</span>
+                    <span style={{ fontSize: 12, color: "#555" }}> ratet </span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#e8e0d0" }}>{r.snusName}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: "#333" }}>{formatDate(r.date)}</span>
+                </div>
+                <StarRating value={r.rating} size={13} />
+                {r.text && <div style={{ fontSize: 13, color: "#888", marginTop: 6, lineHeight: 1.5 }}>{r.text}</div>}
+              </div>
+            ))}
           </>
         )}
 
@@ -269,6 +356,17 @@ export default function App() {
             <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || "ukjent"}</div>
             <div style={{ fontSize: 12, color: "#444", marginTop: 6 }}>{user.email}</div>
             {isAdmin && <div style={{ fontSize: 10, color: "#e8b84b", marginTop: 8, letterSpacing: 2.5, fontWeight: 700 }}>⚡ ADMIN</div>}
+            <div style={{ marginTop: 32, textAlign: "left" }}>
+              <div style={s.sectionTitle}>Mine vurderinger</div>
+              {allReviews.filter(r => r.user === displayName).length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center" }}>Du har ikke ratet noen snus ennå</div>}
+              {allReviews.filter(r => r.user === displayName).map((r, i) => (
+                <div key={i} style={{ ...s.reviewCard, cursor: "pointer" }} onClick={() => openSnusFromReview(r)}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#e8e0d0", marginBottom: 4 }}>{r.snusName}</div>
+                  <StarRating value={r.rating} size={13} />
+                  {r.text && <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>{r.text}</div>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -284,7 +382,6 @@ export default function App() {
             <span style={s.label}>Styrke</span>
             <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
             <button style={{ ...s.btn, marginTop: 16 }} onClick={adminAddSnus}>+ Legg til snus</button>
-
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>Til godkjenning ({pendingList.length})</div>
             {pendingList.length === 0 && <div style={{ color: "#444", fontSize: 13 }}>Ingen ventende forslag.</div>}
             {pendingList.map(item => (
@@ -312,7 +409,6 @@ export default function App() {
               <span style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
               <span style={{ fontSize: 12, color: "#444" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
             </div>
-
             {selectedSnus.reviews?.length > 0 && (
               <>
                 <div style={{ ...s.sectionTitle, marginTop: 8 }}>Anmeldelser</div>
@@ -320,7 +416,7 @@ export default function App() {
                   <div key={i} style={s.reviewCard}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{r.user}</span>
-                      <span style={{ fontSize: 10, color: "#333" }}>{formatDate(r.date)}</span>
+                      <span style={{ fontSize: 10, color: "#333" }}>{formatDateFull(r.date)}</span>
                     </div>
                     <StarRating value={r.rating} size={13} />
                     {r.text && <div style={{ fontSize: 13, color: "#aaa", marginTop: 8, lineHeight: 1.5 }}>{r.text}</div>}
@@ -328,7 +424,6 @@ export default function App() {
                 ))}
               </>
             )}
-
             <div style={{ borderTop: "1px solid #1e1e1e", marginTop: 20, paddingTop: 20 }}>
               {!submitted ? (
                 <>
