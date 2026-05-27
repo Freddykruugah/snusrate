@@ -5,13 +5,13 @@ import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
-function ChiliStrength({ value }) {
+function FlameStrength({ value }) {
   const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
   const count = levels[value] || 3;
   return (
     <span style={{ fontSize: 12 }}>
       {[1,2,3,4,5].map(i => (
-        <span key={i} style={{ opacity: i <= count ? 1 : 0.2 }}>🔥</span>
+        <span key={i} style={{ opacity: i <= count ? 1 : 0.15 }}>🔥</span>
       ))}
     </span>
   );
@@ -26,11 +26,30 @@ function StarRating({ value, onChange, size = 20 }) {
           onMouseEnter={() => onChange && setHover(i)}
           onMouseLeave={() => onChange && setHover(0)}
           style={{ fontSize: size, cursor: onChange ? "pointer" : "default",
-            color: i <= (hover || value) ? "#e8b84b" : "#3a3a3a", transition: "color 0.1s", userSelect: "none" }}>★</span>
+            color: i <= (hover || value) ? "#e8b84b" : "#2a2a2a", transition: "color 0.15s", userSelect: "none" }}>★</span>
       ))}
     </div>
   );
 }
+
+function StrengthSelector({ value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+      {[1,2,3,4,5].map(i => (
+        <button key={i} onClick={() => onChange(String(i))} style={{
+          background: value === String(i) ? "#1e1e1e" : "none",
+          border: value === String(i) ? "1px solid #e8b84b" : "1px solid #2a2a2a",
+          borderRadius: 6, padding: "7px 10px", cursor: "pointer", fontSize: 13
+        }}>{"🔥".repeat(i)}</button>
+      ))}
+    </div>
+  );
+}
+
+const formatDate = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -49,17 +68,17 @@ export default function App() {
   const [addSubmitted, setAddSubmitted] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
+  const [search, setSearch] = useState("");
 
   const isAdmin = user?.email === ADMIN_EMAIL;
+  const displayName = user?.displayName || user?.email;
 
   useEffect(() => {
     onAuthStateChanged(auth, u => setUser(u));
     fetchSnus();
   }, []);
 
-  useEffect(() => {
-    if (isAdmin) fetchPending();
-  }, [isAdmin]);
+  useEffect(() => { if (isAdmin) fetchPending(); }, [isAdmin]);
 
   const fetchSnus = async () => {
     try {
@@ -89,15 +108,11 @@ export default function App() {
 
   const submitReview = async () => {
     if (!userRating || !selectedSnus) return;
-    const displayName = user.displayName || user.email;
+    const alreadyRated = selectedSnus.reviews?.some(r => r.user === displayName);
+    if (alreadyRated) { alert("Du har allerede ratet denne snusen!"); return; }
     const snusRef = doc(db, "snus", selectedSnus.id);
     await updateDoc(snusRef, {
-      reviews: arrayUnion({ 
-        user: displayName, 
-        rating: userRating, 
-        text: reviewText, 
-        date: new Date().toISOString() 
-      }),
+      reviews: arrayUnion({ user: displayName, rating: userRating, text: reviewText, date: new Date().toISOString() }),
       totalRatings: (selectedSnus.totalRatings || 0) + 1,
       totalScore: (selectedSnus.totalScore || 0) + userRating,
       avgRating: ((selectedSnus.totalScore || 0) + userRating) / ((selectedSnus.totalRatings || 0) + 1),
@@ -108,85 +123,63 @@ export default function App() {
 
   const submitNewSnus = async () => {
     if (!newSnus.name || !newSnus.brand) return;
-    await addDoc(collection(db, "snus_pending"), { ...newSnus, submittedBy: user.displayName || user.email, approved: false, createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus_pending"), { ...newSnus, submittedBy: displayName, approved: false, createdAt: new Date().toISOString() });
     setAddSubmitted(true);
   };
 
   const adminAddSnus = async () => {
     if (!adminNewSnus.name || !adminNewSnus.brand) return;
-    await addDoc(collection(db, "snus"), {
-      ...adminNewSnus,
-      avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [],
-      createdAt: new Date().toISOString()
-    });
+    await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
     setAdminNewSnus({ name: "", brand: "", type: "", strength: "3" });
     fetchSnus();
     alert("Snus lagt til!");
   };
 
   const approvePending = async (item) => {
-    await addDoc(collection(db, "snus"), {
-      name: item.name, brand: item.brand, type: item.type, strength: item.strength,
-      avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [],
-      createdAt: new Date().toISOString()
-    });
+    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
-    fetchPending();
-    fetchSnus();
+    fetchPending(); fetchSnus();
   };
 
-  const rejectPending = async (id) => {
-    await deleteDoc(doc(db, "snus_pending", id));
-    fetchPending();
-  };
+  const rejectPending = async (id) => { await deleteDoc(doc(db, "snus_pending", id)); fetchPending(); };
 
-  const s = {
-    app: { fontFamily: "'Georgia', serif", background: "#0f0f0f", minHeight: "100vh", color: "#e8e0d0", maxWidth: 420, margin: "0 auto" },
-    header: { background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "16px 20px 12px", position: "sticky", top: 0, zIndex: 10 },
-    logo: { fontSize: 22, fontWeight: 700, color: "#e8b84b" },
-    logoSub: { fontSize: 10, letterSpacing: 3, color: "#666", textTransform: "uppercase" },
-    nav: { display: "flex", borderBottom: "1px solid #1e1e1e", background: "#111", overflowX: "auto" },
-    navBtn: (a) => ({ flex: 1, padding: "12px 4px", background: "none", border: "none", color: a ? "#e8b84b" : "#555", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent", whiteSpace: "nowrap" }),
-    content: { padding: 16 },
-    card: { background: "#161616", border: "1px solid #222", borderRadius: 8, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
-    btn: { background: "#e8b84b", color: "#0f0f0f", border: "none", borderRadius: 6, padding: "11px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 12 },
-    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 6, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 8 },
-    btnGreen: { background: "#4a7c59", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginRight: 8 },
-    btnRed: { background: "#b03a3a", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer" },
-    input: { width: "100%", background: "#0f0f0f", border: "1px solid #2a2a2a", borderRadius: 6, padding: "10px 12px", color: "#e8e0d0", fontSize: 13, marginTop: 8, boxSizing: "border-box", fontFamily: "inherit" },
-    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", alignItems: "flex-end" },
-    modalBox: { background: "#161616", border: "1px solid #2a2a2a", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 420, margin: "0 auto", padding: "24px 20px 32px", maxHeight: "85vh", overflowY: "auto" },
-    label: { fontSize: 11, letterSpacing: 1.5, color: "#666", textTransform: "uppercase", marginTop: 14, display: "block" },
-    sectionTitle: { fontSize: 11, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 },
-    pendingCard: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
-    reviewCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, padding: "10px 12px", marginBottom: 8 },
-  };
-
-  const StrengthSelector = ({ value, onChange }) => (
-    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-      {[1,2,3,4,5].map(i => (
-        <button key={i} onClick={() => onChange(String(i))} style={{
-          background: value === String(i) ? "#2a2a2a" : "none",
-          border: value === String(i) ? "1px solid #e8b84b" : "1px solid #333",
-          borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 14
-        }}>
-          {"🔥".repeat(i)}
-        </button>
-      ))}
-    </div>
+  const filtered = snusList.filter(s =>
+    s.name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.brand?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const formatDate = (iso) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const s = {
+    app: { fontFamily: "'Georgia', serif", background: "#0a0a0a", minHeight: "100vh", color: "#e8e0d0", maxWidth: 430, margin: "0 auto" },
+    header: { background: "#111", borderBottom: "1px solid #1e1e1e", padding: "14px 20px", position: "sticky", top: 0, zIndex: 10 },
+    logo: { fontSize: 24, fontWeight: 700, color: "#e8b84b", letterSpacing: -0.5 },
+    logoSub: { fontSize: 9, letterSpacing: 3.5, color: "#555", textTransform: "uppercase", marginTop: 1 },
+    nav: { display: "flex", borderBottom: "1px solid #1a1a1a", background: "#0f0f0f", overflowX: "auto" },
+    navBtn: (a) => ({ flex: 1, padding: "13px 4px", background: "none", border: "none", color: a ? "#e8b84b" : "#444", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent", whiteSpace: "nowrap", transition: "color 0.15s" }),
+    content: { padding: "16px 16px 80px" },
+    card: { background: "#141414", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer", transition: "border-color 0.15s" },
+    btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
+    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+    btnGreen: { background: "#2d5a3d", color: "#7ecb96", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginRight: 8 },
+    btnRed: { background: "#5a2d2d", color: "#cb7e7e", border: "none", borderRadius: 6, padding: "8px 16px", fontWeight: 700, fontSize: 12, cursor: "pointer" },
+    input: { width: "100%", background: "#111", border: "1px solid #222", borderRadius: 8, padding: "12px 14px", color: "#e8e0d0", fontSize: 14, marginTop: 8, boxSizing: "border-box", fontFamily: "inherit", outline: "none" },
+    searchBox: { width: "100%", background: "#141414", border: "1px solid #222", borderRadius: 10, padding: "12px 16px", color: "#e8e0d0", fontSize: 14, marginBottom: 14, boxSizing: "border-box", fontFamily: "inherit", outline: "none" },
+    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 100, display: "flex", alignItems: "flex-end" },
+    modalBox: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
+    label: { fontSize: 10, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginTop: 16, display: "block", fontWeight: 700 },
+    sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
+    pendingCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 10 },
+    reviewCard: { background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 8, padding: "12px 14px", marginBottom: 8 },
   };
 
   if (!user) return (
     <div style={s.app}>
-      <div style={s.header}><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
+      <div style={s.header}>
+        <div style={s.logo}>SnusRate</div>
+        <div style={s.logoSub}>Nordic Snus Community</div>
+      </div>
       <div style={s.content}>
-        <div style={{ textAlign: "center", padding: "40px 0 20px", fontSize: 40 }}>🤠</div>
-        <div style={{ ...s.sectionTitle, textAlign: "center" }}>{authMode === "login" ? "Logg inn" : "Registrer deg"}</div>
+        <div style={{ textAlign: "center", padding: "48px 0 24px", fontSize: 48 }}>🤠</div>
+        <div style={{ ...s.sectionTitle, textAlign: "center", marginBottom: 20 }}>{authMode === "login" ? "Logg inn" : "Opprett konto"}</div>
         {authMode === "register" && (
           <>
             <span style={s.label}>Brukernavn</span>
@@ -209,30 +202,38 @@ export default function App() {
     <div style={s.app}>
       <div style={s.header}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
-          <button onClick={() => signOut(auth)} style={{ background: "none", border: "1px solid #333", color: "#666", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>Logg ut</button>
+          <div>
+            <div style={s.logo}>SnusRate</div>
+            <div style={s.logoSub}>Nordic Snus Community</div>
+          </div>
+          <button onClick={() => signOut(auth)} style={{ background: "none", border: "1px solid #222", color: "#555", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>Logg ut</button>
         </div>
       </div>
+
       <div style={s.nav}>
         {[["explore","Utforsk"],["topp","Topp 10"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
           <button key={k} style={s.navBtn(tab===k)} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
-      <div style={s.content}>
 
+      <div style={s.content}>
         {tab === "explore" && (
           <>
-            <div style={s.sectionTitle}>Alle snus ({snusList.length})</div>
-            {snusList.length === 0 && <div style={{ color: "#555", fontSize: 13 }}>Ingen snus lagt til ennå.</div>}
-            {snusList.map(snus => (
+            <input style={s.searchBox} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
+            <div style={s.sectionTitle}>Alle snus ({filtered.length})</div>
+            {filtered.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center", marginTop: 40 }}>Ingen snus funnet</div>}
+            {filtered.map(snus => (
               <div key={snus.id} style={s.card} onClick={() => { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{snus.name}</div>
-                <div style={{ fontSize: 12, color: "#777", marginBottom: 4 }}>{snus.brand} · {snus.type}</div>
-                <ChiliStrength value={snus.strength} />
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                  <StarRating value={Math.round(snus.avgRating || 0)} size={13} />
-                  <span style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</span>
-                  <span style={{ fontSize: 11, color: "#555" }}>({snus.totalRatings || 0} ratings)</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{snus.name}</div>
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{snus.brand} · {snus.type}</div>
+                    <FlameStrength value={snus.strength} />
+                  </div>
+                  <div style={{ textAlign: "right", marginLeft: 12 }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</div>
+                    <div style={{ fontSize: 10, color: "#555" }}>{snus.totalRatings || 0} ratings</div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -244,16 +245,18 @@ export default function App() {
           <>
             <div style={s.sectionTitle}>Høyest rated</div>
             {snusList.map((snus, i) => (
-              <div key={snus.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: 18, fontWeight: 900, color: i < 3 ? "#e8b84b" : "#333", width: 28, textAlign: "center" }}>{i+1}</div>
+              <div key={snus.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a" }}>
+                <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, color: i === 0 ? "#e8b84b" : i === 1 ? "#aaa" : i === 2 ? "#cd7f32" : "#2a2a2a", width: 30, textAlign: "center" }}>
+                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
-                  <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>{snus.brand}</div>
-                  <ChiliStrength value={snus.strength} />
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 3 }}>{snus.brand}</div>
+                  <FlameStrength value={snus.strength} />
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</div>
-                  <div style={{ fontSize: 10, color: "#555" }}>{snus.totalRatings || 0} ratings</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</div>
+                  <div style={{ fontSize: 10, color: "#444" }}>{snus.totalRatings || 0} ratings</div>
                 </div>
               </div>
             ))}
@@ -261,20 +264,20 @@ export default function App() {
         )}
 
         {tab === "profil" && (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🤠</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || user.email}</div>
-            <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{user.email}</div>
-            {isAdmin && <div style={{ fontSize: 11, color: "#e8b84b", marginTop: 4, letterSpacing: 2 }}>ADMIN</div>}
+          <div style={{ textAlign: "center", padding: "48px 0 24px" }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>🤠</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || "ukjent"}</div>
+            <div style={{ fontSize: 12, color: "#444", marginTop: 6 }}>{user.email}</div>
+            {isAdmin && <div style={{ fontSize: 10, color: "#e8b84b", marginTop: 8, letterSpacing: 2.5, fontWeight: 700 }}>⚡ ADMIN</div>}
           </div>
         )}
 
         {tab === "admin" && isAdmin && (
           <>
-            <div style={s.sectionTitle}>Legg til ny snus direkte</div>
+            <div style={s.sectionTitle}>Legg til ny snus</div>
             <span style={s.label}>Produktnavn</span>
             <input style={s.input} placeholder="f.eks. General White" value={adminNewSnus.name} onChange={e => setAdminNewSnus({...adminNewSnus, name: e.target.value})} />
-            <span style={s.label}>Merke</span>
+            <span style={s.label}>Merke / Produsent</span>
             <input style={s.input} placeholder="f.eks. Swedish Match" value={adminNewSnus.brand} onChange={e => setAdminNewSnus({...adminNewSnus, brand: e.target.value})} />
             <span style={s.label}>Type</span>
             <input style={s.input} placeholder="f.eks. White Portion" value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})} />
@@ -282,18 +285,16 @@ export default function App() {
             <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
             <button style={{ ...s.btn, marginTop: 16 }} onClick={adminAddSnus}>+ Legg til snus</button>
 
-            <div style={{ ...s.sectionTitle, marginTop: 28 }}>Til godkjenning ({pendingList.length})</div>
-            {pendingList.length === 0 && <div style={{ color: "#555", fontSize: 13 }}>Ingen ventende forslag.</div>}
+            <div style={{ ...s.sectionTitle, marginTop: 32 }}>Til godkjenning ({pendingList.length})</div>
+            {pendingList.length === 0 && <div style={{ color: "#444", fontSize: 13 }}>Ingen ventende forslag.</div>}
             {pendingList.map(item => (
               <div key={item.id} style={s.pendingCard}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
-                <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{item.brand} · {item.type}</div>
-                <ChiliStrength value={item.strength} />
-                <div style={{ fontSize: 11, color: "#555", margin: "8px 0" }}>Fra: {item.submittedBy}</div>
-                <div>
-                  <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Godkjenn</button>
-                  <button style={s.btnRed} onClick={() => rejectPending(item.id)}>✗ Avvis</button>
-                </div>
+                <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>{item.brand} · {item.type}</div>
+                <FlameStrength value={item.strength} />
+                <div style={{ fontSize: 11, color: "#444", margin: "8px 0" }}>Fra: {item.submittedBy}</div>
+                <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Godkjenn</button>
+                <button style={s.btnRed} onClick={() => rejectPending(item.id)}>✗ Avvis</button>
               </div>
             ))}
           </>
@@ -303,48 +304,46 @@ export default function App() {
       {selectedSnus && (
         <div style={s.modal} onClick={() => setSelectedSnus(null)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
-            <ChiliStrength value={selectedSnus.strength} />
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
+            <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 8 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
+            <FlameStrength value={selectedSnus.strength} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
               <StarRating value={Math.round(selectedSnus.avgRating || 0)} size={18} />
-              <span style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
-              <span style={{ fontSize: 12, color: "#555" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
+              <span style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
+              <span style={{ fontSize: 12, color: "#444" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
             </div>
 
-            {/* Anmeldelser */}
-            {selectedSnus.reviews && selectedSnus.reviews.length > 0 && (
+            {selectedSnus.reviews?.length > 0 && (
               <>
-                <div style={{ ...s.sectionTitle, marginTop: 16 }}>Anmeldelser</div>
+                <div style={{ ...s.sectionTitle, marginTop: 8 }}>Anmeldelser</div>
                 {[...selectedSnus.reviews].reverse().map((r, i) => (
                   <div key={i} style={s.reviewCard}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{r.user}</span>
-                      <span style={{ fontSize: 10, color: "#444" }}>{formatDate(r.date)}</span>
+                      <span style={{ fontSize: 10, color: "#333" }}>{formatDate(r.date)}</span>
                     </div>
-                    <StarRating value={r.rating} size={12} />
-                    {r.text && <div style={{ fontSize: 13, color: "#bbb", marginTop: 6 }}>{r.text}</div>}
+                    <StarRating value={r.rating} size={13} />
+                    {r.text && <div style={{ fontSize: 13, color: "#aaa", marginTop: 8, lineHeight: 1.5 }}>{r.text}</div>}
                   </div>
                 ))}
               </>
             )}
 
-            <div style={{ borderTop: "1px solid #222", marginTop: 16, paddingTop: 16 }}>
+            <div style={{ borderTop: "1px solid #1e1e1e", marginTop: 20, paddingTop: 20 }}>
               {!submitted ? (
                 <>
-                  <div style={s.sectionTitle}>Skriv din anmeldelse</div>
-                  <div style={{ display: "flex", justifyContent: "center", margin: "12px 0" }}>
-                    <StarRating value={userRating} onChange={setUserRating} size={36} />
+                  <div style={s.sectionTitle}>Din anmeldelse</div>
+                  <div style={{ display: "flex", justifyContent: "center", margin: "16px 0" }}>
+                    <StarRating value={userRating} onChange={setUserRating} size={40} />
                   </div>
-                  <textarea style={{ ...s.input, resize: "vertical", minHeight: 80 }} placeholder="Hva synes du?" value={reviewText} onChange={e => setReviewText(e.target.value)} />
+                  <textarea style={{ ...s.input, resize: "vertical", minHeight: 90 }} placeholder="Hva synes du? Smak, styrke, format..." value={reviewText} onChange={e => setReviewText(e.target.value)} />
                   <button style={s.btn} onClick={submitReview}>Send inn</button>
                   <button style={s.btnOutline} onClick={() => setSelectedSnus(null)}>Lukk</button>
                 </>
               ) : (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ fontSize: 40 }}>✅</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 8 }}>Rating lagret!</div>
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 48 }}>✅</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: "#e8b84b", marginTop: 10 }}>Rating lagret!</div>
                   <button style={{ ...s.btn, marginTop: 20 }} onClick={() => setSelectedSnus(null)}>Tilbake</button>
                 </div>
               )}
@@ -356,8 +355,8 @@ export default function App() {
       {showAddForm && (
         <div style={s.modal} onClick={() => setShowAddForm(false)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Foreslå ny snus</div>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 16 }}>Sendes til admin for godkjenning</div>
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Foreslå ny snus</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Sendes til admin for godkjenning</div>
             {!addSubmitted ? (
               <>
                 <span style={s.label}>Produktnavn</span>
@@ -372,9 +371,9 @@ export default function App() {
                 <button style={s.btnOutline} onClick={() => setShowAddForm(false)}>Avbryt</button>
               </>
             ) : (
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <div style={{ fontSize: 40 }}>📬</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 8 }}>Sendt!</div>
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{ fontSize: 48 }}>📬</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: "#e8b84b", marginTop: 10 }}>Sendt til admin!</div>
                 <button style={{ ...s.btn, marginTop: 20 }} onClick={() => setShowAddForm(false)}>OK</button>
               </div>
             )}
