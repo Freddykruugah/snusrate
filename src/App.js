@@ -153,7 +153,7 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
     s.brand?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const s = {
+  const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
     input: { width: "100%", background: "#111", border: "1px solid #222", borderRadius: 8, padding: "12px 14px", color: "#e8e0d0", fontSize: 14, marginTop: 8, boxSizing: "border-box", fontFamily: "inherit", outline: "none" },
@@ -164,8 +164,8 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
   };
 
   return (
-    <div style={s.modal} onClick={onClose}>
-      <div style={s.box} onClick={e => e.stopPropagation()}>
+    <div style={st.modal} onClick={onClose}>
+      <div style={st.box} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Ukjent strekkode</div>
         <div style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>EAN: {barcode}</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -174,10 +174,10 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
         </div>
         {mode === "match" && (
           <>
-            <input style={{ ...s.input, marginTop: 0 }} placeholder="🔍 Søk produkt..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input style={{ ...st.input, marginTop: 0 }} placeholder="🔍 Søk produkt..." value={search} onChange={e => setSearch(e.target.value)} />
             <div style={{ marginTop: 10, maxHeight: 300, overflowY: "auto" }}>
               {filtered.map(snus => (
-                <div key={snus.id} style={s.card} onClick={() => onMatch(snus, barcode)}>
+                <div key={snus.id} style={st.card} onClick={() => onMatch(snus, barcode)}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>{snus.brand} · {snus.type}</div>
                 </div>
@@ -187,18 +187,18 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
         )}
         {mode === "suggest" && (
           <>
-            <span style={s.label}>Produktnavn</span>
-            <input style={s.input} placeholder="f.eks. General White" value={newSnus.name} onChange={e => setNewSnus({...newSnus, name: e.target.value})} />
-            <span style={s.label}>Merke</span>
-            <input style={s.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
-            <span style={s.label}>Type</span>
-            <input style={s.input} placeholder="f.eks. White Portion" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
-            <span style={s.label}>Styrke</span>
+            <span style={st.label}>Produktnavn</span>
+            <input style={st.input} placeholder="f.eks. General White" value={newSnus.name} onChange={e => setNewSnus({...newSnus, name: e.target.value})} />
+            <span style={st.label}>Merke</span>
+            <input style={st.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
+            <span style={st.label}>Type</span>
+            <input style={st.input} placeholder="f.eks. White Portion" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
+            <span style={st.label}>Styrke</span>
             <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
-            <button style={s.btn} onClick={() => onSuggest({ ...newSnus, barcode })}>Send til admin</button>
+            <button style={st.btn} onClick={() => onSuggest({ ...newSnus, barcode })}>Send til admin</button>
           </>
         )}
-        <button style={s.btnOutline} onClick={onClose}>Avbryt</button>
+        <button style={st.btnOutline} onClick={onClose}>Avbryt</button>
       </div>
     </div>
   );
@@ -260,11 +260,7 @@ export default function App() {
   useEffect(() => {
     onAuthStateChanged(auth, u => {
       setUser(u);
-      if (u) {
-        fetchUserProfile(u.uid);
-        fetchBuddyRequests(u.uid);
-        fetchBuddies(u.uid);
-      }
+      if (u) { fetchUserProfile(u.uid); fetchBuddyRequests(u.uid); fetchBuddies(u.uid); }
     });
     fetchSnus();
   }, []);
@@ -286,12 +282,8 @@ export default function App() {
 
   const fetchUserProfile = async (uid) => {
     try {
-      const ref = doc(db, "users", uid);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        setUserProfile(snap.data());
-        setProfileForm(snap.data());
-      }
+      const snap = await getDoc(doc(db, "users", uid));
+      if (snap.exists()) { setUserProfile(snap.data()); setProfileForm(snap.data()); }
     } catch(e) {}
   };
 
@@ -315,13 +307,6 @@ export default function App() {
     } catch(e) {}
   };
 
-    try {
-      const q = query(collection(db, "buddy_requests"), where("fromUid", "==", uid), where("status", "==", "pending"));
-      const snap = await getDocs(q);
-      setPendingBuddies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch(e) {}
-  };
-
   const searchBuddies = async () => {
     if (!buddySearch.trim()) return;
     try {
@@ -332,15 +317,16 @@ export default function App() {
   };
 
   const sendBuddyRequest = async (toUser) => {
-    const existing = await getDocs(query(collection(db, "buddy_requests"),
-      where("fromUid", "==", user.uid), where("toUid", "==", toUser.uid)));
-    if (!existing.empty) { alert("Forespørsel allerede sendt!"); return; }
-    await addDoc(collection(db, "buddy_requests"), {
-      fromUid: user.uid, fromName: displayName,
-      toUid: toUser.uid, toName: toUser.displayName,
-      status: "pending", createdAt: new Date().toISOString()
-    });
-    alert(`Snusbuddy-forespørsel sendt til @${toUser.displayName}! 🤠`);
+    try {
+      const existing = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", user.uid), where("toUid", "==", toUser.uid)));
+      if (!existing.empty) { alert("Forespørsel allerede sendt!"); return; }
+      await addDoc(collection(db, "buddy_requests"), {
+        fromUid: user.uid, fromName: displayName,
+        toUid: toUser.uid, toName: toUser.displayName,
+        status: "pending", createdAt: new Date().toISOString()
+      });
+      alert(`Snusbuddy-forespørsel sendt til @${toUser.displayName}! 🤠`);
+    } catch(e) {}
   };
 
   const acceptBuddy = async (request) => {
@@ -377,7 +363,7 @@ export default function App() {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-    } catch (e) { alert(e.message); }
+    } catch(e) { alert(e.message); }
   };
 
   const submitReview = async () => {
@@ -666,7 +652,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Buddy-forespørsler */}
             {buddyRequests.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <div style={s.sectionTitle}>🤠 Snusbuddy-forespørsler ({buddyRequests.length})</div>
@@ -682,7 +667,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Snusbuddies */}
             <div style={{ marginBottom: 20 }}>
               <div style={s.sectionTitle}>Snusbuddies ({buddies.length})</div>
               {buddies.length === 0 && <div style={{ color: "#444", fontSize: 13, marginBottom: 12 }}>Ingen Snusbuddies ennå</div>}
@@ -691,12 +675,10 @@ export default function App() {
                   <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>🤠 @{b.name}</span>
                 </div>
               ))}
-
-              {/* Søk etter brukere */}
-              <div style={s.sectionTitle}>Finn Snusbuddies</div>
+              <div style={{ ...s.sectionTitle, marginTop: 16 }}>Finn Snusbuddies</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input style={{ ...s.input, marginTop: 0, flex: 1 }} placeholder="Søk brukernavn..." value={buddySearch} onChange={e => setBuddySearch(e.target.value)} onKeyDown={e => e.key === "Enter" && searchBuddies()} />
-                <button onClick={searchBuddies} style={{ ...s.btnSmall, marginTop: 0, padding: "0 16px" }}>Søk</button>
+                <button onClick={searchBuddies} style={{ ...s.btnSmall, padding: "0 16px" }}>Søk</button>
               </div>
               {buddyResults.map((u, i) => (
                 <div key={i} style={{ ...s.buddyCard, marginTop: 8 }}>
