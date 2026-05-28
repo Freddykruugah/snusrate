@@ -6,6 +6,44 @@ import { BrowserMultiFormatReader } from "@zxing/library";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
+const PRIVACY_POLICY = `PERSONVERNERKLÆRING FOR SNUSRATE
+
+Sist oppdatert: Mai 2026
+
+1. HVEM ER VI?
+SnusRate er en norsk app for rating og utforskning av snusprodukter.
+Kontakt: kontakt@snusrate.no
+
+2. HVILKE DATA SAMLER VI INN?
+- E-postadresse
+- Brukernavn
+- Alder, kjønn, by og land (selvoppgitt)
+- Vurderinger og anmeldelser du skriver
+- Snusbuddies-relasjoner
+
+3. HVORFOR SAMLER VI INN DATA?
+- For å opprette og administrere din brukerkonto
+- For å vise vurderinger og statistikk i appen
+- For å koble deg med andre Snusbuddies
+
+4. DELER VI DATA MED ANDRE?
+Vi selger aldri persondata til tredjeparter.
+Data lagres i Google Firebase i Europa (Frankfurt).
+
+5. DINE RETTIGHETER
+Du kan når som helst:
+- Be om innsyn i dine data
+- Be om sletting av din konto og data
+- Trekke tilbake samtykke
+
+Kontakt oss på kontakt@snusrate.no for å utøve dine rettigheter.
+
+6. ALDERSGRENSE
+SnusRate er kun for personer over 18 år.
+
+7. COOKIES
+Vi bruker kun nødvendige cookies for innlogging.`;
+
 const getRatingTitle = (count) => {
   if (count >= 100) return "👑 Snuskonge";
   if (count >= 50) return "⭐ Snusmester";
@@ -75,6 +113,63 @@ const formatDateFull = (iso) => {
   const d = new Date(iso);
   return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
+
+function HamburgerMenu({ onClose }) {
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
+  const st = {
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200 },
+    menu: { position: "fixed", top: 0, right: 0, width: 280, height: "100vh", background: "#141414", borderLeft: "1px solid #222", padding: "60px 20px 20px", zIndex: 201, overflowY: "auto" },
+    item: { display: "flex", alignItems: "center", gap: 12, padding: "16px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", fontSize: 15, color: "#e8e0d0" },
+    close: { position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#555", fontSize: 24, cursor: "pointer" },
+    title: { fontSize: 11, letterSpacing: 2, color: "#444", textTransform: "uppercase", marginBottom: 8, fontWeight: 700 },
+    privacyBox: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 300, overflowY: "auto", padding: 20 },
+    privacyText: { color: "#aaa", fontSize: 13, lineHeight: 1.8, whiteSpace: "pre-wrap", maxWidth: 430, margin: "0 auto" },
+  };
+
+  if (showPrivacy) return (
+    <div style={st.privacyBox}>
+      <div style={{ maxWidth: 430, margin: "0 auto" }}>
+        <button onClick={() => setShowPrivacy(false)} style={{ background: "none", border: "1px solid #333", color: "#e8b84b", borderRadius: 6, padding: "8px 16px", cursor: "pointer", marginBottom: 20 }}>← Tilbake</button>
+        <div style={st.privacyText}>{PRIVACY_POLICY}</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div style={st.overlay} onClick={onClose} />
+      <div style={st.menu}>
+        <button style={st.close} onClick={onClose}>✕</button>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b", marginBottom: 24 }}>SnusRate</div>
+
+        <div style={st.title}>Info</div>
+        <div style={st.item} onClick={() => setShowPrivacy(true)}>
+          <span>📋</span> Personvernerklæring
+        </div>
+        <div style={st.item}>
+          <span>📜</span> Vilkår for bruk
+        </div>
+        <div style={st.item}>
+          <span>ℹ️</span> Om SnusRate
+        </div>
+
+        <div style={{ ...st.title, marginTop: 20 }}>Hjelp</div>
+        <div style={st.item}>
+          <span>❓</span> FAQ
+        </div>
+        <div style={st.item}>
+          <span>📧</span> Kontakt oss
+        </div>
+
+        <div style={{ marginTop: 40, fontSize: 11, color: "#333", textAlign: "center" }}>
+          SnusRate v1.0{"\n"}
+          © 2026 SnusRate
+        </div>
+      </div>
+    </>
+  );
+}
 
 function LiveTicker({ allReviews, onClickReview }) {
   const [index, setIndex] = useState(0);
@@ -219,7 +314,6 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
           const b1 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", currentUser.uid), where("toUid", "==", data.uid)));
           const b2 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", data.uid), where("toUid", "==", currentUser.uid)));
           if (!b1.empty || !b2.empty) setAlreadyBuddy(true);
-          // Hent vurderinger
           const reviews = snusList.flatMap(s =>
             (s.reviews || []).filter(r => r.user === username).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
           ).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -354,6 +448,8 @@ export default function App() {
   const [gender, setGender] = useState("");
   const [country, setCountry] = useState("Norge");
   const [city, setCity] = useState("");
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [showPrivacyInReg, setShowPrivacyInReg] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [snusList, setSnusList] = useState([]);
   const [pendingList, setPendingList] = useState([]);
@@ -381,6 +477,7 @@ export default function App() {
   const [notifCount, setNotifCount] = useState(0);
   const [viewingUser, setViewingUser] = useState(null);
   const [showBuddyList, setShowBuddyList] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -500,6 +597,7 @@ export default function App() {
         const ageNum = parseInt(age);
         if (!age || ageNum < 18) { alert("Du må være minst 18 år!"); return; }
         if (!gender) { alert("Velg kjønn!"); return; }
+        if (!acceptedPrivacy) { alert("Du må godta personvernerklæringen!"); return; }
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
         await setDoc(doc(db, "users", result.user.uid), {
@@ -517,19 +615,13 @@ export default function App() {
     if (!userRating || !selectedSnus) return;
     const existingReview = selectedSnus.reviews?.find(r => r.user === displayName);
     if (existingReview && !editingReview) { alert("Du har allerede ratet denne snusen!"); return; }
-
     const snusRef = doc(db, "snus", selectedSnus.id);
     if (editingReview && existingReview) {
-      // Fjern gammel rating og legg til ny
       const newReviews = selectedSnus.reviews.map(r =>
         r.user === displayName ? { ...r, rating: userRating, text: reviewText, edited: true } : r
       );
       const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
-      await updateDoc(snusRef, {
-        reviews: newReviews,
-        totalScore,
-        avgRating: totalScore / newReviews.length,
-      });
+      await updateDoc(snusRef, { reviews: newReviews, totalScore, avgRating: totalScore / newReviews.length });
     } else {
       await updateDoc(snusRef, {
         reviews: arrayUnion({ user: displayName, rating: userRating, text: reviewText, date: new Date().toISOString(), likes: [] }),
@@ -538,13 +630,10 @@ export default function App() {
         avgRating: ((selectedSnus.totalScore || 0) + userRating) / ((selectedSnus.totalRatings || 0) + 1),
       });
     }
-    setSubmitted(true);
-    setEditingReview(false);
-    fetchSnus();
+    setSubmitted(true); setEditingReview(false); fetchSnus();
   };
 
   const likeReview = async (snus, review) => {
-    const snusRef = doc(db, "snus", snus.id);
     const likes = review.likes || [];
     const hasLiked = likes.includes(displayName);
     const newReviews = snus.reviews.map(r =>
@@ -552,9 +641,8 @@ export default function App() {
         ? { ...r, likes: hasLiked ? likes.filter(l => l !== displayName) : [...likes, displayName] }
         : r
     );
-    await updateDoc(snusRef, { reviews: newReviews });
+    await updateDoc(doc(db, "snus", snus.id), { reviews: newReviews });
     fetchSnus();
-    // Update selectedSnus
     setSelectedSnus(prev => prev ? { ...prev, reviews: newReviews } : null);
   };
 
@@ -574,16 +662,10 @@ export default function App() {
   const adminUpdateSnus = async () => {
     if (!editingSnus) return;
     await updateDoc(doc(db, "snus", editingSnus.id), {
-      name: editingSnus.name,
-      brand: editingSnus.brand,
-      type: editingSnus.type,
-      strength: editingSnus.strength,
-      description: editingSnus.description || "",
-      barcode: editingSnus.barcode || "",
+      name: editingSnus.name, brand: editingSnus.brand, type: editingSnus.type,
+      strength: editingSnus.strength, description: editingSnus.description || "", barcode: editingSnus.barcode || "",
     });
-    setEditingSnus(null);
-    fetchSnus();
-    alert("Produkt oppdatert!");
+    setEditingSnus(null); fetchSnus(); alert("Produkt oppdatert!");
   };
 
   const approvePending = async (item) => {
@@ -609,18 +691,13 @@ export default function App() {
 
   const startEditReview = (snus) => {
     const myReview = snus.reviews?.find(r => r.user === displayName);
-    if (myReview) {
-      setUserRating(myReview.rating);
-      setReviewText(myReview.text || "");
-      setEditingReview(true);
-      setSubmitted(false);
-    }
+    if (myReview) { setUserRating(myReview.rating); setReviewText(myReview.text || ""); setEditingReview(true); setSubmitted(false); }
   };
 
   const handleScanResult = (barcode) => {
     setShowScanner(false);
     const found = snusList.find(s => s.barcode === barcode);
-    if (found) { openSnus(found); }
+    if (found) openSnus(found);
     else setUnknownBarcode(barcode);
   };
 
@@ -672,9 +749,12 @@ export default function App() {
   if (!user) return (
     <div style={s.app}>
       <div style={s.header}>
-        <div style={s.logo}>SnusRate</div>
-        <div style={s.logoSub}>Nordic Snus Community</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
+          <button onClick={() => setShowMenu(true)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer" }}>☰</button>
+        </div>
       </div>
+      {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} />}
       <div style={s.content}>
         <div style={{ textAlign: "center", padding: "48px 0 24px", fontSize: 48 }}>🤠</div>
         <div style={{ ...s.sectionTitle, textAlign: "center", marginBottom: 20 }}>{authMode === "login" ? "Logg inn" : "Opprett konto"}</div>
@@ -695,6 +775,15 @@ export default function App() {
             </select>
             <span style={s.label}>By</span>
             <input style={s.input} value={city} onChange={e => setCity(e.target.value)} placeholder="f.eks. Oslo" />
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16 }}>
+              <input type="checkbox" checked={acceptedPrivacy} onChange={e => setAcceptedPrivacy(e.target.checked)} style={{ marginTop: 2, cursor: "pointer", width: 16, height: 16 }} />
+              <span style={{ fontSize: 13, color: "#888" }}>
+                Jeg godtar{" "}
+                <span style={{ color: "#e8b84b", cursor: "pointer", textDecoration: "underline" }} onClick={() => setShowPrivacyInReg(true)}>
+                  personvernerklæringen
+                </span>
+              </span>
+            </div>
           </>
         )}
         <span style={s.label}>E-post</span>
@@ -706,6 +795,15 @@ export default function App() {
           {authMode === "login" ? "Ny bruker? Registrer deg" : "Har konto? Logg inn"}
         </button>
       </div>
+
+      {showPrivacyInReg && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 300, overflowY: "auto", padding: 20 }}>
+          <div style={{ maxWidth: 430, margin: "0 auto" }}>
+            <button onClick={() => setShowPrivacyInReg(false)} style={{ background: "none", border: "1px solid #333", color: "#e8b84b", borderRadius: 6, padding: "8px 16px", cursor: "pointer", marginBottom: 20 }}>← Tilbake</button>
+            <div style={{ color: "#aaa", fontSize: 13, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{PRIVACY_POLICY}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -721,22 +819,12 @@ export default function App() {
           </div>
         </div>
       )}
+      {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} />}
       {viewingUser && (
-        <UserProfileModal
-          username={viewingUser}
-          currentUser={user}
-          currentDisplayName={displayName}
-          snusList={snusList}
-          onClose={() => setViewingUser(null)}
-          onOpenSnus={openSnus}
-        />
+        <UserProfileModal username={viewingUser} currentUser={user} currentDisplayName={displayName} snusList={snusList} onClose={() => setViewingUser(null)} onOpenSnus={openSnus} />
       )}
       {showBuddyList && (
-        <BuddyListModal
-          buddies={buddies}
-          onSelectBuddy={(name) => { setShowBuddyList(false); setViewingUser(name); }}
-          onClose={() => setShowBuddyList(false)}
-        />
+        <BuddyListModal buddies={buddies} onSelectBuddy={(name) => { setShowBuddyList(false); setViewingUser(name); }} onClose={() => setShowBuddyList(false)} />
       )}
 
       <div style={s.header}>
@@ -749,7 +837,7 @@ export default function App() {
                 🤠 {notifCount}
               </button>
             )}
-            <button onClick={() => signOut(auth)} style={{ background: "none", border: "1px solid #222", color: "#555", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>Logg ut</button>
+            <button onClick={() => setShowMenu(true)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer" }}>☰</button>
           </div>
         </div>
       </div>
@@ -814,7 +902,7 @@ export default function App() {
           <>
             <div style={s.sectionTitle}>Høyest rated</div>
             {snusList.map((snus, i) => (
-              <div key={snus.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a" }}>
+              <div key={snus.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(snus)}>
                 <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, width: 30, textAlign: "center" }}>
                   {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
                 </div>
@@ -1021,7 +1109,6 @@ export default function App() {
               <span style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
               <span style={{ fontSize: 12, color: "#444" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
             </div>
-
             {selectedSnus.reviews?.length > 0 && (
               <>
                 <div style={s.sectionTitle}>Anmeldelser</div>
@@ -1060,7 +1147,6 @@ export default function App() {
                   })}
               </>
             )}
-
             <div style={{ borderTop: "1px solid #1e1e1e", marginTop: 20, paddingTop: 20 }}>
               {!submitted ? (
                 <>
