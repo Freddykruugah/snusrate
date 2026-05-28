@@ -505,12 +505,7 @@ export default function App() {
     return matchSearch && matchStrength && matchType;
   });
 
-  const favTopList = snusList.map(sn => ({
-    ...sn,
-    favCount: snusList.flatMap(s => []).length
-  }));
 
-  const snusFavCount = {};
   // Count favorites from reviews data isn't available, so we'd need user data
   // Instead show top rated with fav indicator
   const topFavSnus = [...snusList].sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0)).slice(0, 10);
