@@ -8,6 +8,8 @@ const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
 const AVATARS = ["🤠","🔥","❄️","💨","🌿","⚡","🎯","🏆","👑","💪","🌶️","🧊","🍃","🌲","⛰️","🌊","🏔️","🎖️","⭐","💎","🔱","⚜️","🌨️","🍀","🌑","🌙","☄️","🗡️","🛡️","🔮"];
 
+const COUNTRY_FLAGS = { "Norge": "🇳🇴", "Sverige": "🇸🇪", "Danmark": "🇩🇰", "Finland": "🇫🇮", "Annet": "🌍" };
+
 const PRIVACY_POLICY = `PERSONVERNERKLÆRING FOR SNUSRATE
 
 Sist oppdatert: Mai 2026
@@ -63,6 +65,48 @@ const getProductTitle = (count) => {
   return null;
 };
 
+const getStreakTitle = (days) => {
+  if (days >= 30) return "🔥 Snuslegend";
+  if (days >= 14) return "⚡ På hugget";
+  if (days >= 7) return "💪 På strekk";
+  if (days >= 3) return "🌱 I gang";
+  return null;
+};
+
+const formatDate = (iso) => {
+  const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return "akkurat nå";
+  if (diff < 3600) return `${Math.floor(diff/60)}m siden`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}t siden`;
+  return `${Math.floor(diff/86400)}d siden`;
+};
+
+const formatDateFull = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+const calculateStreak = (reviews) => {
+  if (!reviews || reviews.length === 0) return 0;
+  const dates = reviews.map(r => new Date(r.date).toDateString());
+  const unique = [...new Set(dates)].sort((a, b) => new Date(b) - new Date(a));
+  let streak = 0;
+  let current = new Date();
+  current.setHours(0, 0, 0, 0);
+  for (let d of unique) {
+    const day = new Date(d);
+    const diff = Math.round((current - day) / (1000 * 60 * 60 * 24));
+    if (diff <= 1) { streak++; current = day; }
+    else break;
+  }
+  return streak;
+};
+
+const countLikesReceived = (reviews) => {
+  return reviews.reduce((sum, r) => sum + (r.likes?.length || 0), 0);
+};
+
 function FlameStrength({ value }) {
   const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
   const count = levels[value] || 3;
@@ -102,20 +146,6 @@ function StrengthSelector({ value, onChange }) {
   );
 }
 
-const formatDate = (iso) => {
-  const d = new Date(iso);
-  const diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 60) return "akkurat nå";
-  if (diff < 3600) return `${Math.floor(diff/60)}m siden`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}t siden`;
-  return `${Math.floor(diff/86400)}d siden`;
-};
-
-const formatDateFull = (iso) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-};
-
 function AvatarPicker({ selected, onSelect }) {
   return (
     <div style={{ marginTop: 10 }}>
@@ -134,7 +164,6 @@ function AvatarPicker({ selected, onSelect }) {
 
 function HamburgerMenu({ onClose }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
-
   const st = {
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200 },
     menu: { position: "fixed", top: 0, right: 0, width: 280, height: "100vh", background: "#141414", borderLeft: "1px solid #222", padding: "60px 20px 20px", zIndex: 201, overflowY: "auto" },
@@ -142,7 +171,6 @@ function HamburgerMenu({ onClose }) {
     close: { position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#555", fontSize: 24, cursor: "pointer" },
     title: { fontSize: 11, letterSpacing: 2, color: "#444", textTransform: "uppercase", marginBottom: 8, marginTop: 20, fontWeight: 700, display: "block" },
   };
-
   if (showPrivacy) return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 300, overflowY: "auto", padding: 20 }}>
       <div style={{ maxWidth: 430, margin: "0 auto" }}>
@@ -151,7 +179,6 @@ function HamburgerMenu({ onClose }) {
       </div>
     </div>
   );
-
   return (
     <>
       <div style={st.overlay} onClick={onClose} />
@@ -166,12 +193,8 @@ function HamburgerMenu({ onClose }) {
         <div style={st.item}><span>❓</span> FAQ</div>
         <div style={st.item}><span>📧</span> Kontakt oss</div>
         <span style={st.title}>Konto</span>
-        <div style={{ ...st.item, color: "#cb7e7e" }} onClick={() => { signOut(auth); onClose(); }}>
-          <span>🚪</span> Logg ut
-        </div>
-        <div style={{ marginTop: 40, fontSize: 11, color: "#333", textAlign: "center" }}>
-          SnusRate v1.0 · © 2026 SnusRate
-        </div>
+        <div style={{ ...st.item, color: "#cb7e7e" }} onClick={() => { signOut(auth); onClose(); }}><span>🚪</span> Logg ut</div>
+        <div style={{ marginTop: 40, fontSize: 11, color: "#333", textAlign: "center" }}>SnusRate v1.0 · © 2026 SnusRate</div>
       </div>
     </>
   );
@@ -180,7 +203,6 @@ function HamburgerMenu({ onClose }) {
 function LiveTicker({ allReviews, onClickReview }) {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
-
   useEffect(() => {
     if (allReviews.length === 0) return;
     const interval = setInterval(() => {
@@ -189,21 +211,14 @@ function LiveTicker({ allReviews, onClickReview }) {
     }, 4000);
     return () => clearInterval(interval);
   }, [allReviews.length]);
-
   if (allReviews.length === 0) return null;
   const r = allReviews[index];
-
   return (
-    <div onClick={() => onClickReview(r)} style={{
-      background: "#111", border: "1px solid #1e1e1e", borderRadius: 8,
-      padding: "10px 14px", marginBottom: 14, cursor: "pointer",
-      opacity: visible ? 1 : 0, transition: "opacity 0.3s",
-      display: "flex", alignItems: "center", gap: 10,
-    }}>
+    <div onClick={() => onClickReview(r)} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 14px", marginBottom: 14, cursor: "pointer", opacity: visible ? 1 : 0, transition: "opacity 0.3s", display: "flex", alignItems: "center", gap: 10 }}>
       <div style={{ fontSize: 18 }}>🔴</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "#e8b84b", fontWeight: 700 }}>
-          @{r.user} ratet <span style={{ color: "#e8e0d0" }}>{r.snusName}</span>
+          {r.avatar || "🤠"} @{r.user} ratet <span style={{ color: "#e8e0d0" }}>{r.snusName}</span>
         </div>
         <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>
           {"★".repeat(r.rating)}{"☆".repeat(5-r.rating)} · {formatDate(r.date)}
@@ -218,20 +233,14 @@ function BarcodeScanner({ onResult, onClose }) {
   const videoRef = useRef(null);
   const readerRef = useRef(null);
   const hasScanned = useRef(false);
-
   const handleResult = useCallback((result) => {
-    if (result && !hasScanned.current) {
-      hasScanned.current = true;
-      onResult(result.getText());
-    }
+    if (result && !hasScanned.current) { hasScanned.current = true; onResult(result.getText()); }
   }, [onResult]);
-
   useEffect(() => {
     readerRef.current = new BrowserMultiFormatReader();
     readerRef.current.decodeFromVideoDevice(null, videoRef.current, handleResult);
     return () => { if (readerRef.current) readerRef.current.reset(); };
   }, [handleResult]);
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
       <div style={{ position: "relative", width: "100%", maxWidth: 430 }}>
@@ -248,10 +257,7 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
   const [search, setSearch] = useState("");
   const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
   const [mode, setMode] = useState("match");
-  const filtered = snusList.filter(s =>
-    s.name?.toLowerCase().includes(search.toLowerCase()) ||
-    s.brand?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = snusList.filter(s => s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase()));
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
@@ -259,7 +265,6 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
     label: { fontSize: 10, letterSpacing: 2, color: "#555", textTransform: "uppercase", marginTop: 16, display: "block", fontWeight: 700 },
-    card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer" },
   };
   return (
     <div style={st.modal} onClick={onClose}>
@@ -275,7 +280,7 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
             <input style={{ ...st.input, marginTop: 0 }} placeholder="🔍 Søk produkt..." value={search} onChange={e => setSearch(e.target.value)} />
             <div style={{ marginTop: 10, maxHeight: 300, overflowY: "auto" }}>
               {filtered.map(snus => (
-                <div key={snus.id} style={st.card} onClick={() => onMatch(snus, barcode)}>
+                <div key={snus.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer" }} onClick={() => onMatch(snus, barcode)}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>{snus.brand} · {snus.type}</div>
                 </div>
@@ -320,9 +325,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
           const b1 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", currentUser.uid), where("toUid", "==", data.uid)));
           const b2 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", data.uid), where("toUid", "==", currentUser.uid)));
           if (!b1.empty || !b2.empty) setAlreadyBuddy(true);
-          const reviews = snusList.flatMap(s =>
-            (s.reviews || []).filter(r => r.user === username).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
-          ).sort((a, b) => new Date(b.date) - new Date(a.date));
+          const reviews = snusList.flatMap(s => (s.reviews || []).filter(r => r.user === username).map(r => ({ ...r, snusId: s.id, snusName: s.name }))).sort((a, b) => new Date(b.date) - new Date(a.date));
           setUserReviews(reviews);
         }
       } catch(e) {}
@@ -334,16 +337,14 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
   const sendRequest = async () => {
     if (!profile) return;
     try {
-      await addDoc(collection(db, "buddy_requests"), {
-        fromUid: currentUser.uid, fromName: currentDisplayName,
-        toUid: profile.uid, toName: profile.displayName,
-        status: "pending", createdAt: new Date().toISOString()
-      });
+      await addDoc(collection(db, "buddy_requests"), { fromUid: currentUser.uid, fromName: currentDisplayName, toUid: profile.uid, toName: profile.displayName, status: "pending", createdAt: new Date().toISOString() });
       setRequestSent(true);
     } catch(e) {}
   };
 
   const favSnusObj = snusList.find(s => s.id === profile?.favoriteSnus);
+  const streak = calculateStreak(userReviews);
+  const likesReceived = countLikesReceived(userReviews);
 
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
@@ -354,38 +355,39 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
     card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
     sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
     badge: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" },
+    statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px", textAlign: "center", flex: 1 },
   };
 
   return (
     <div style={st.modal} onClick={onClose}>
       <div style={st.box} onClick={e => e.stopPropagation()}>
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Laster...</div>
-        ) : !profile ? (
-          <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Bruker ikke funnet</div>
-        ) : (
+        {loading ? <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Laster...</div>
+        : !profile ? <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Bruker ikke funnet</div>
+        : (
           <>
             <div style={{ textAlign: "center", paddingBottom: 16 }}>
               <div style={{ fontSize: 56, marginBottom: 10 }}>{profile.avatar || "🤠"}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
               <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                {profile.city ? `${profile.city}, ` : ""}{profile.country}
+                {COUNTRY_FLAGS[profile.country] || "🌍"} {profile.city ? `${profile.city}, ` : ""}{profile.country}
                 {profile.age ? ` · ${profile.age} år` : ""}
                 {profile.gender ? ` · ${profile.gender}` : ""}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
                 <span style={st.badge}>{getRatingTitle(userReviews.length)}</span>
                 {getProductTitle(profile.approvedProducts || 0) && <span style={st.badge}>{getProductTitle(profile.approvedProducts || 0)}</span>}
+                {getStreakTitle(streak) && <span style={st.badge}>{getStreakTitle(streak)}</span>}
               </div>
             </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{userReviews.length}</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Vurderinger</div></div>
+              <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{likesReceived}</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Likes</div></div>
+              <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{streak}🔥</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Streak</div></div>
+            </div>
             {username !== currentDisplayName && (
-              alreadyBuddy ? (
-                <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>🤠 Dere er Snusbuddies!</div>
-              ) : requestSent ? (
-                <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>✅ Forespørsel sendt!</div>
-              ) : (
-                <button style={st.btn} onClick={sendRequest}>🤠 Send Snusbuddy-forespørsel</button>
-              )
+              alreadyBuddy ? <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>🤠 Dere er Snusbuddies!</div>
+              : requestSent ? <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>✅ Forespørsel sendt!</div>
+              : <button style={st.btn} onClick={sendRequest}>🤠 Send Snusbuddy-forespørsel</button>
             )}
             {favSnusObj && (
               <div style={{ marginTop: 16, marginBottom: 8 }}>
@@ -486,20 +488,16 @@ export default function App() {
   const displayName = user?.displayName || user?.email;
   const myAvatar = userProfile?.avatar || "🤠";
 
-  const myReviews = snusList.flatMap(s =>
-    (s.reviews || []).filter(r => r.user === displayName).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
-  );
-
-  const allReviews = snusList.flatMap(s =>
-    (s.reviews || []).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
-  ).sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const myAvgRating = myReviews.length > 0
-    ? (myReviews.reduce((sum, r) => sum + r.rating, 0) / myReviews.length).toFixed(1) : "–";
-
-  const approvedCount = userProfile?.approvedProducts || 0;
+  const myReviews = snusList.flatMap(s => (s.reviews || []).filter(r => r.user === displayName).map(r => ({ ...r, snusId: s.id, snusName: s.name })));
+  const allReviews = snusList.flatMap(s => (s.reviews || []).map(r => ({ ...r, snusId: s.id, snusName: s.name }))).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const myAvgRating = myReviews.length > 0 ? (myReviews.reduce((sum, r) => sum + r.rating, 0) / myReviews.length).toFixed(1) : "–";
+  const myStreak = calculateStreak(myReviews);
+  const myLikesReceived = countLikesReceived(myReviews);
   const ratingTitle = getRatingTitle(myReviews.length);
-  const productTitle = getProductTitle(approvedCount);
+  const productTitle = getProductTitle(userProfile?.approvedProducts || 0);
+  const streakTitle = getStreakTitle(myStreak);
+  const filtered = snusList.filter(s => s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase()));
+  const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
 
   useEffect(() => {
     onAuthStateChanged(auth, u => {
@@ -563,11 +561,7 @@ export default function App() {
     try {
       const existing = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", user.uid), where("toUid", "==", toUser.uid)));
       if (!existing.empty) { alert("Forespørsel allerede sendt!"); return; }
-      await addDoc(collection(db, "buddy_requests"), {
-        fromUid: user.uid, fromName: displayName, fromAvatar: myAvatar,
-        toUid: toUser.uid, toName: toUser.displayName, toAvatar: toUser.avatar || "🤠",
-        status: "pending", createdAt: new Date().toISOString()
-      });
+      await addDoc(collection(db, "buddy_requests"), { fromUid: user.uid, fromName: displayName, fromAvatar: myAvatar, toUid: toUser.uid, toName: toUser.displayName, toAvatar: toUser.avatar || "🤠", status: "pending", createdAt: new Date().toISOString() });
       alert(`Snusbuddy-forespørsel sendt til @${toUser.displayName}! 🤠`);
     } catch(e) {}
   };
@@ -600,11 +594,7 @@ export default function App() {
         if (!acceptedPrivacy) { alert("Du må godta personvernerklæringen!"); return; }
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
-        await setDoc(doc(db, "users", result.user.uid), {
-          displayName: username.trim(), displayNameLower: username.trim().toLowerCase(),
-          age: ageNum, gender, country, city, avatar: selectedAvatar,
-          favoriteSnus: "", approvedProducts: 0
-        });
+        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0 });
         setUser({ ...result.user, displayName: username.trim() });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -622,9 +612,7 @@ export default function App() {
     if (existingReview && !editingReview) { alert("Du har allerede ratet denne snusen!"); return; }
     const snusRef = doc(db, "snus", selectedSnus.id);
     if (editingReview && existingReview) {
-      const newReviews = selectedSnus.reviews.map(r =>
-        r.user === displayName ? { ...r, rating: userRating, text: reviewText, edited: true } : r
-      );
+      const newReviews = selectedSnus.reviews.map(r => r.user === displayName ? { ...r, rating: userRating, text: reviewText, edited: true } : r);
       const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
       await updateDoc(snusRef, { reviews: newReviews, totalScore, avgRating: totalScore / newReviews.length });
     } else {
@@ -641,10 +629,7 @@ export default function App() {
   const likeReview = async (snus, review) => {
     const likes = review.likes || [];
     const hasLiked = likes.includes(displayName);
-    const newReviews = snus.reviews.map(r =>
-      r.user === review.user && r.date === review.date
-        ? { ...r, likes: hasLiked ? likes.filter(l => l !== displayName) : [...likes, displayName] } : r
-    );
+    const newReviews = snus.reviews.map(r => r.user === review.user && r.date === review.date ? { ...r, likes: hasLiked ? likes.filter(l => l !== displayName) : [...likes, displayName] } : r);
     await updateDoc(doc(db, "snus", snus.id), { reviews: newReviews });
     fetchSnus();
     setSelectedSnus(prev => prev ? { ...prev, reviews: newReviews } : null);
@@ -670,10 +655,7 @@ export default function App() {
 
   const adminUpdateSnus = async () => {
     if (!editingSnus) return;
-    await updateDoc(doc(db, "snus", editingSnus.id), {
-      name: editingSnus.name, brand: editingSnus.brand, type: editingSnus.type,
-      strength: editingSnus.strength, description: editingSnus.description || "", barcode: editingSnus.barcode || "",
-    });
+    await updateDoc(doc(db, "snus", editingSnus.id), { name: editingSnus.name, brand: editingSnus.brand, type: editingSnus.type, strength: editingSnus.strength, description: editingSnus.description || "", barcode: editingSnus.barcode || "" });
     setEditingSnus(null); fetchSnus(); alert("Oppdatert!");
   };
 
@@ -703,13 +685,6 @@ export default function App() {
     await addDoc(collection(db, "snus_pending"), { ...snusData, submittedBy: displayName, submittedByUid: user.uid, approved: false, createdAt: new Date().toISOString() });
     setUnknownBarcode(null); alert("Sendt til admin!");
   };
-
-  const filtered = snusList.filter(s =>
-    s.name?.toLowerCase().includes(search.toLowerCase()) ||
-    s.brand?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
 
   const s = {
     app: { fontFamily: "'Georgia', serif", background: "#0a0a0a", minHeight: "100vh", color: "#e8e0d0", maxWidth: 430, margin: "0 auto" },
@@ -772,10 +747,7 @@ export default function App() {
             <input style={s.input} value={city} onChange={e => setCity(e.target.value)} placeholder="f.eks. Oslo" />
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16 }}>
               <input type="checkbox" checked={acceptedPrivacy} onChange={e => setAcceptedPrivacy(e.target.checked)} style={{ marginTop: 2, cursor: "pointer", width: 16, height: 16 }} />
-              <span style={{ fontSize: 13, color: "#888" }}>
-                Jeg godtar{" "}
-                <span style={{ color: "#e8b84b", cursor: "pointer", textDecoration: "underline" }} onClick={() => setShowPrivacyInReg(true)}>personvernerklæringen</span>
-              </span>
+              <span style={{ fontSize: 13, color: "#888" }}>Jeg godtar{" "}<span style={{ color: "#e8b84b", cursor: "pointer", textDecoration: "underline" }} onClick={() => setShowPrivacyInReg(true)}>personvernerklæringen</span></span>
             </div>
           </>
         )}
@@ -805,10 +777,7 @@ export default function App() {
       {unknownBarcode && <UnknownBarcodeModal barcode={unknownBarcode} snusList={snusList} onMatch={handleBarcodeMatch} onSuggest={handleBarcodeSuggest} onClose={() => setUnknownBarcode(null)} />}
       {barcodeMatched && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.8)" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 56 }}>✅</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 12 }}>Strekkode koblet!</div>
-          </div>
+          <div style={{ textAlign: "center" }}><div style={{ fontSize: 56 }}>✅</div><div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 12 }}>Strekkode koblet!</div></div>
         </div>
       )}
       {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} />}
@@ -820,9 +789,7 @@ export default function App() {
           <div><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setShowScanner(true)} style={{ background: "none", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>📷</button>
-            {notifCount > 0 && (
-              <button onClick={() => setTab("profil")} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🤠 {notifCount}</button>
-            )}
+            {notifCount > 0 && <button onClick={() => setTab("profil")} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🤠 {notifCount}</button>}
             <button onClick={() => setShowMenu(true)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer" }}>☰</button>
           </div>
         </div>
@@ -914,7 +881,7 @@ export default function App() {
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || "ukjent"}</div>
               {userProfile && (
                 <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                  {userProfile.city ? `${userProfile.city}, ` : ""}{userProfile.country}
+                  {COUNTRY_FLAGS[userProfile.country] || "🌍"} {userProfile.city ? `${userProfile.city}, ` : ""}{userProfile.country}
                   {userProfile.age ? ` · ${userProfile.age} år` : ""}
                   {userProfile.gender ? ` · ${userProfile.gender}` : ""}
                 </div>
@@ -923,21 +890,30 @@ export default function App() {
               <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
                 <span style={s.badge}>{ratingTitle}</span>
                 {productTitle && <span style={s.badge}>{productTitle}</span>}
+                {streakTitle && <span style={s.badge}>{streakTitle}</span>}
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
               <div style={s.statBox}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{myReviews.length}</div>
-                <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Vurderinger</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myReviews.length}</div>
+                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Vurderinger</div>
               </div>
               <div style={s.statBox}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{myAvgRating}</div>
-                <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Snitt gitt</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myAvgRating}</div>
+                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Snitt</div>
+              </div>
+              <div style={s.statBox}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myLikesReceived}</div>
+                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Likes</div>
+              </div>
+              <div style={s.statBox}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myStreak}🔥</div>
+                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Streak</div>
               </div>
               <div style={s.statBox} onClick={() => setShowBuddyList(true)}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{buddies.length}</div>
-                <div style={{ fontSize: 10, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Buddies</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{buddies.length}</div>
+                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Buddies</div>
               </div>
             </div>
 
@@ -982,7 +958,7 @@ export default function App() {
                     <span style={{ fontSize: 24 }}>{u.avatar || "🤠"}</span>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{u.displayName}</div>
-                      <div style={{ fontSize: 11, color: "#555" }}>{u.city ? `${u.city}, ` : ""}{u.country}</div>
+                      <div style={{ fontSize: 11, color: "#555" }}>{COUNTRY_FLAGS[u.country] || "🌍"} {u.city ? `${u.city}, ` : ""}{u.country}</div>
                     </div>
                   </div>
                   <button style={s.btnSmall} onClick={() => sendBuddyRequest(u)}>+ Snusbuddy</button>
@@ -1067,10 +1043,7 @@ export default function App() {
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>Alle produkter ({snusList.length})</div>
             {snusList.map(sn => (
               <div key={sn.id} style={{ ...s.pendingCard, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div>
-                  <div style={{ fontSize: 12, color: "#555" }}>{sn.brand}</div>
-                </div>
+                <div><div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div><div style={{ fontSize: 12, color: "#555" }}>{sn.brand}</div></div>
                 <button style={s.btnSmall} onClick={() => setEditingSnus({...sn})}>✏️ Rediger</button>
               </div>
             ))}
