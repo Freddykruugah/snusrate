@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
-import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, deleteDoc, setDoc, getDoc, where } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc, where } from "firebase/firestore";
 import { BrowserMultiFormatReader } from "@zxing/library";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
@@ -201,8 +201,9 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
   );
 }
 
-function UserProfileModal({ username, currentUser, currentDisplayName, onClose }) {
+function UserProfileModal({ username, currentUser, currentDisplayName, snusList, onClose, onOpenSnus }) {
   const [profile, setProfile] = useState(null);
+  const [userReviews, setUserReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requestSent, setRequestSent] = useState(false);
   const [alreadyBuddy, setAlreadyBuddy] = useState(false);
@@ -215,16 +216,20 @@ function UserProfileModal({ username, currentUser, currentDisplayName, onClose }
         if (!snap.empty) {
           const data = { uid: snap.docs[0].id, ...snap.docs[0].data() };
           setProfile(data);
-          // Sjekk om allerede buddies
           const b1 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", currentUser.uid), where("toUid", "==", data.uid)));
           const b2 = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", data.uid), where("toUid", "==", currentUser.uid)));
           if (!b1.empty || !b2.empty) setAlreadyBuddy(true);
+          // Hent vurderinger
+          const reviews = snusList.flatMap(s =>
+            (s.reviews || []).filter(r => r.user === username).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
+          ).sort((a, b) => new Date(b.date) - new Date(a.date));
+          setUserReviews(reviews);
         }
       } catch(e) {}
       setLoading(false);
     };
     load();
-  }, [username, currentUser.uid]);
+  }, [username, currentUser.uid, snusList]);
 
   const sendRequest = async () => {
     if (!profile) return;
@@ -238,12 +243,16 @@ function UserProfileModal({ username, currentUser, currentDisplayName, onClose }
     } catch(e) {}
   };
 
+  const favSnusObj = snusList.find(s => s.id === profile?.favoriteSnus);
+
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
-    statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", textAlign: "center", flex: 1 },
+    reviewCard: { background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer" },
+    card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
+    sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
   };
 
   return (
@@ -255,7 +264,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, onClose }
           <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Bruker ikke funnet</div>
         ) : (
           <>
-            <div style={{ textAlign: "center", paddingBottom: 20 }}>
+            <div style={{ textAlign: "center", paddingBottom: 16 }}>
               <div style={{ fontSize: 48, marginBottom: 10 }}>🤠</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
               <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
@@ -264,10 +273,11 @@ function UserProfileModal({ username, currentUser, currentDisplayName, onClose }
                 {profile.gender ? ` · ${profile.gender}` : ""}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
-                <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{getRatingTitle(profile.reviewCount || 0)}</span>
+                <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{getRatingTitle(userReviews.length)}</span>
                 {getProductTitle(profile.approvedProducts || 0) && <span style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" }}>{getProductTitle(profile.approvedProducts || 0)}</span>}
               </div>
             </div>
+
             {username !== currentDisplayName && (
               alreadyBuddy ? (
                 <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>🤠 Dere er Snusbuddies!</div>
@@ -277,6 +287,31 @@ function UserProfileModal({ username, currentUser, currentDisplayName, onClose }
                 <button style={st.btn} onClick={sendRequest}>🤠 Send Snusbuddy-forespørsel</button>
               )
             )}
+
+            {favSnusObj && (
+              <div style={{ marginTop: 16, marginBottom: 8 }}>
+                <div style={st.sectionTitle}>Favorittsnuus</div>
+                <div style={st.card} onClick={() => { onOpenSnus(favSnusObj); onClose(); }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
+                  <FlameStrength value={favSnusObj.strength} />
+                </div>
+              </div>
+            )}
+
+            {userReviews.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={st.sectionTitle}>Vurderinger ({userReviews.length})</div>
+                {userReviews.map((r, i) => (
+                  <div key={i} style={st.reviewCard} onClick={() => { onOpenSnus(snusList.find(s => s.id === r.snusId)); onClose(); }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{r.snusName}</div>
+                    <StarRating value={r.rating} size={13} />
+                    {r.text && <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>{r.text}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <button style={st.btnOutline} onClick={onClose}>Lukk</button>
           </>
         )}
@@ -300,9 +335,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         {buddies.map((b, i) => (
           <div key={i} style={st.buddyCard} onClick={() => onSelectBuddy(b.name)}>
             <div style={{ fontSize: 28 }}>🤠</div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>@{b.name}</div>
-            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>@{b.name}</div>
           </div>
         ))}
         <button style={st.btnOutline} onClick={onClose}>Lukk</button>
@@ -328,10 +361,12 @@ export default function App() {
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
+  const [editingReview, setEditingReview] = useState(false);
+  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "" });
   const [addSubmitted, setAddSubmitted] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
+  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "" });
+  const [editingSnus, setEditingSnus] = useState(null);
   const [search, setSearch] = useState("");
   const [showScanner, setShowScanner] = useState(false);
   const [unknownBarcode, setUnknownBarcode] = useState(null);
@@ -441,8 +476,7 @@ export default function App() {
 
   const acceptBuddy = async (request) => {
     await updateDoc(doc(db, "buddy_requests", request.id), { status: "accepted" });
-    fetchBuddyRequests(user.uid);
-    fetchBuddies(user.uid);
+    fetchBuddyRequests(user.uid); fetchBuddies(user.uid);
     setNotifCount(n => Math.max(0, n - 1));
   };
 
@@ -454,11 +488,7 @@ export default function App() {
 
   const saveProfile = async () => {
     if (!user) return;
-    await setDoc(doc(db, "users", user.uid), {
-      ...profileForm,
-      displayName,
-      displayNameLower: displayName.toLowerCase()
-    }, { merge: true });
+    await setDoc(doc(db, "users", user.uid), { ...profileForm, displayName, displayNameLower: displayName.toLowerCase() }, { merge: true });
     setUserProfile({ ...profileForm, displayName });
     setEditingProfile(false);
   };
@@ -473,10 +503,8 @@ export default function App() {
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
         await setDoc(doc(db, "users", result.user.uid), {
-          displayName: username.trim(),
-          displayNameLower: username.trim().toLowerCase(),
-          age: ageNum, gender, country, city,
-          favoriteSnus: "", approvedProducts: 0
+          displayName: username.trim(), displayNameLower: username.trim().toLowerCase(),
+          age: ageNum, gender, country, city, favoriteSnus: "", approvedProducts: 0
         });
         setUser({ ...result.user, displayName: username.trim() });
       } else {
@@ -487,16 +515,47 @@ export default function App() {
 
   const submitReview = async () => {
     if (!userRating || !selectedSnus) return;
-    const alreadyRated = selectedSnus.reviews?.some(r => r.user === displayName);
-    if (alreadyRated) { alert("Du har allerede ratet denne snusen!"); return; }
-    await updateDoc(doc(db, "snus", selectedSnus.id), {
-      reviews: arrayUnion({ user: displayName, rating: userRating, text: reviewText, date: new Date().toISOString() }),
-      totalRatings: (selectedSnus.totalRatings || 0) + 1,
-      totalScore: (selectedSnus.totalScore || 0) + userRating,
-      avgRating: ((selectedSnus.totalScore || 0) + userRating) / ((selectedSnus.totalRatings || 0) + 1),
-    });
+    const existingReview = selectedSnus.reviews?.find(r => r.user === displayName);
+    if (existingReview && !editingReview) { alert("Du har allerede ratet denne snusen!"); return; }
+
+    const snusRef = doc(db, "snus", selectedSnus.id);
+    if (editingReview && existingReview) {
+      // Fjern gammel rating og legg til ny
+      const newReviews = selectedSnus.reviews.map(r =>
+        r.user === displayName ? { ...r, rating: userRating, text: reviewText, edited: true } : r
+      );
+      const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
+      await updateDoc(snusRef, {
+        reviews: newReviews,
+        totalScore,
+        avgRating: totalScore / newReviews.length,
+      });
+    } else {
+      await updateDoc(snusRef, {
+        reviews: arrayUnion({ user: displayName, rating: userRating, text: reviewText, date: new Date().toISOString(), likes: [] }),
+        totalRatings: (selectedSnus.totalRatings || 0) + 1,
+        totalScore: (selectedSnus.totalScore || 0) + userRating,
+        avgRating: ((selectedSnus.totalScore || 0) + userRating) / ((selectedSnus.totalRatings || 0) + 1),
+      });
+    }
     setSubmitted(true);
+    setEditingReview(false);
     fetchSnus();
+  };
+
+  const likeReview = async (snus, review) => {
+    const snusRef = doc(db, "snus", snus.id);
+    const likes = review.likes || [];
+    const hasLiked = likes.includes(displayName);
+    const newReviews = snus.reviews.map(r =>
+      r.user === review.user && r.date === review.date
+        ? { ...r, likes: hasLiked ? likes.filter(l => l !== displayName) : [...likes, displayName] }
+        : r
+    );
+    await updateDoc(snusRef, { reviews: newReviews });
+    fetchSnus();
+    // Update selectedSnus
+    setSelectedSnus(prev => prev ? { ...prev, reviews: newReviews } : null);
   };
 
   const submitNewSnus = async () => {
@@ -508,12 +567,27 @@ export default function App() {
   const adminAddSnus = async () => {
     if (!adminNewSnus.name || !adminNewSnus.brand) return;
     await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
-    setAdminNewSnus({ name: "", brand: "", type: "", strength: "3" });
+    setAdminNewSnus({ name: "", brand: "", type: "", strength: "3", description: "" });
     fetchSnus(); alert("Snus lagt til!");
   };
 
+  const adminUpdateSnus = async () => {
+    if (!editingSnus) return;
+    await updateDoc(doc(db, "snus", editingSnus.id), {
+      name: editingSnus.name,
+      brand: editingSnus.brand,
+      type: editingSnus.type,
+      strength: editingSnus.strength,
+      description: editingSnus.description || "",
+      barcode: editingSnus.barcode || "",
+    });
+    setEditingSnus(null);
+    fetchSnus();
+    alert("Produkt oppdatert!");
+  };
+
   const approvePending = async (item) => {
-    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", description: item.description || "", avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
     if (item.submittedByUid) {
       const userSnap = await getDoc(doc(db, "users", item.submittedByUid));
@@ -526,20 +600,34 @@ export default function App() {
 
   const openSnusFromReview = (review) => {
     const snus = snusList.find(s => s.id === review.snusId);
-    if (snus) { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }
+    if (snus) { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); setEditingReview(false); }
+  };
+
+  const openSnus = (snus) => {
+    if (snus) { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); setEditingReview(false); }
+  };
+
+  const startEditReview = (snus) => {
+    const myReview = snus.reviews?.find(r => r.user === displayName);
+    if (myReview) {
+      setUserRating(myReview.rating);
+      setReviewText(myReview.text || "");
+      setEditingReview(true);
+      setSubmitted(false);
+    }
   };
 
   const handleScanResult = (barcode) => {
     setShowScanner(false);
     const found = snusList.find(s => s.barcode === barcode);
-    if (found) { setSelectedSnus(found); setUserRating(0); setReviewText(""); setSubmitted(false); }
+    if (found) { openSnus(found); }
     else setUnknownBarcode(barcode);
   };
 
   const handleBarcodeMatch = async (snus, barcode) => {
     await updateDoc(doc(db, "snus", snus.id), { barcode });
     setUnknownBarcode(null); setBarcodeMatched(true); fetchSnus();
-    setTimeout(() => { setBarcodeMatched(false); setSelectedSnus({ ...snus, barcode }); setUserRating(0); setReviewText(""); setSubmitted(false); }, 1500);
+    setTimeout(() => { setBarcodeMatched(false); openSnus({ ...snus, barcode }); }, 1500);
   };
 
   const handleBarcodeSuggest = async (snusData) => {
@@ -638,7 +726,9 @@ export default function App() {
           username={viewingUser}
           currentUser={user}
           currentDisplayName={displayName}
+          snusList={snusList}
           onClose={() => setViewingUser(null)}
+          onOpenSnus={openSnus}
         />
       )}
       {showBuddyList && (
@@ -680,12 +770,13 @@ export default function App() {
             </div>
             <div style={s.sectionTitle}>Alle snus ({filtered.length})</div>
             {filtered.map(snus => (
-              <div key={snus.id} style={s.card} onClick={() => { setSelectedSnus(snus); setUserRating(0); setReviewText(""); setSubmitted(false); }}>
+              <div key={snus.id} style={s.card} onClick={() => openSnus(snus)}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{snus.name}</div>
                     <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{snus.brand} · {snus.type}</div>
                     <FlameStrength value={snus.strength} />
+                    {snus.description && <div style={{ fontSize: 12, color: "#555", marginTop: 6, fontStyle: "italic" }}>{snus.description}</div>}
                   </div>
                   <div style={{ textAlign: "right", marginLeft: 12 }}>
                     <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(snus.avgRating || 0).toFixed(1)}</div>
@@ -706,10 +797,7 @@ export default function App() {
               <div key={i} style={s.reviewCard}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <div>
-                    <span
-                      style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }}
-                      onClick={() => r.user !== displayName && setViewingUser(r.user)}
-                    >@{r.user}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }} onClick={() => r.user !== displayName && setViewingUser(r.user)}>@{r.user}</span>
                     <span style={{ fontSize: 12, color: "#555" }}> ratet </span>
                     <span style={{ fontSize: 13, fontWeight: 700, cursor: "pointer" }} onClick={() => openSnusFromReview(r)}>{r.snusName}</span>
                   </div>
@@ -781,7 +869,7 @@ export default function App() {
             {favSnusObj && (
               <div style={{ marginBottom: 20 }}>
                 <div style={s.sectionTitle}>Favorittsnuus</div>
-                <div style={s.card} onClick={() => { setSelectedSnus(favSnusObj); setUserRating(0); setReviewText(""); setSubmitted(false); }}>
+                <div style={s.card} onClick={() => openSnus(favSnusObj)}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
                   <FlameStrength value={favSnusObj.strength} />
@@ -867,9 +955,43 @@ export default function App() {
             <input style={s.input} placeholder="f.eks. White Portion" value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})} />
             <span style={s.label}>Styrke</span>
             <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
+            <span style={s.label}>Beskrivelse</span>
+            <input style={s.input} placeholder="f.eks. Klassisk tobakkssmak med hint av bergamott" value={adminNewSnus.description || ""} onChange={e => setAdminNewSnus({...adminNewSnus, description: e.target.value})} />
             <span style={s.label}>Strekkode (EAN)</span>
             <input style={s.input} placeholder="f.eks. 7311250083068" value={adminNewSnus.barcode || ""} onChange={e => setAdminNewSnus({...adminNewSnus, barcode: e.target.value})} />
             <button style={{ ...s.btn, marginTop: 16 }} onClick={adminAddSnus}>+ Legg til snus</button>
+
+            {editingSnus && (
+              <div style={{ background: "#111", border: "1px solid #e8b84b", borderRadius: 10, padding: 16, marginTop: 20 }}>
+                <div style={s.sectionTitle}>Rediger: {editingSnus.name}</div>
+                <span style={s.label}>Produktnavn</span>
+                <input style={s.input} value={editingSnus.name} onChange={e => setEditingSnus({...editingSnus, name: e.target.value})} />
+                <span style={s.label}>Merke</span>
+                <input style={s.input} value={editingSnus.brand} onChange={e => setEditingSnus({...editingSnus, brand: e.target.value})} />
+                <span style={s.label}>Type</span>
+                <input style={s.input} value={editingSnus.type} onChange={e => setEditingSnus({...editingSnus, type: e.target.value})} />
+                <span style={s.label}>Styrke</span>
+                <StrengthSelector value={editingSnus.strength} onChange={v => setEditingSnus({...editingSnus, strength: v})} />
+                <span style={s.label}>Beskrivelse</span>
+                <input style={s.input} value={editingSnus.description || ""} onChange={e => setEditingSnus({...editingSnus, description: e.target.value})} />
+                <span style={s.label}>Strekkode</span>
+                <input style={s.input} value={editingSnus.barcode || ""} onChange={e => setEditingSnus({...editingSnus, barcode: e.target.value})} />
+                <button style={s.btn} onClick={adminUpdateSnus}>Lagre endringer</button>
+                <button style={s.btnOutline} onClick={() => setEditingSnus(null)}>Avbryt</button>
+              </div>
+            )}
+
+            <div style={{ ...s.sectionTitle, marginTop: 32 }}>Alle produkter ({snusList.length})</div>
+            {snusList.map(snus => (
+              <div key={snus.id} style={{ ...s.pendingCard, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{snus.name}</div>
+                  <div style={{ fontSize: 12, color: "#555" }}>{snus.brand}</div>
+                </div>
+                <button style={s.btnSmall} onClick={() => setEditingSnus({...snus})}>✏️ Rediger</button>
+              </div>
+            ))}
+
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>Til godkjenning ({pendingList.length})</div>
             {pendingList.length === 0 && <div style={{ color: "#444", fontSize: 13 }}>Ingen ventende.</div>}
             {pendingList.map(item => (
@@ -891,46 +1013,72 @@ export default function App() {
         <div style={s.modal} onClick={() => setSelectedSnus(null)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
-            <div style={{ fontSize: 12, color: "#555", marginBottom: 8 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 4 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
             <FlameStrength value={selectedSnus.strength} />
+            {selectedSnus.description && <div style={{ fontSize: 13, color: "#666", marginTop: 8, fontStyle: "italic" }}>{selectedSnus.description}</div>}
             <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
               <StarRating value={Math.round(selectedSnus.avgRating || 0)} size={18} />
               <span style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
               <span style={{ fontSize: 12, color: "#444" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
             </div>
+
             {selectedSnus.reviews?.length > 0 && (
               <>
-                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 }}>Anmeldelser</div>
-                {[...selectedSnus.reviews].reverse().map((r, i) => (
-                  <div key={i} style={s.reviewCard}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span
-                        style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }}
-                        onClick={() => r.user !== displayName && setViewingUser(r.user)}
-                      >@{r.user}</span>
-                      <span style={{ fontSize: 10, color: "#333" }}>{formatDateFull(r.date)}</span>
-                    </div>
-                    <StarRating value={r.rating} size={13} />
-                    {r.text && <div style={{ fontSize: 13, color: "#aaa", marginTop: 8, lineHeight: 1.5 }}>{r.text}</div>}
-                  </div>
-                ))}
+                <div style={s.sectionTitle}>Anmeldelser</div>
+                {[...selectedSnus.reviews]
+                  .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+                  .map((r, i) => {
+                    const likes = r.likes || [];
+                    const hasLiked = likes.includes(displayName);
+                    const isMyReview = r.user === displayName;
+                    return (
+                      <div key={i} style={s.reviewCard}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: isMyReview ? "default" : "pointer" }}
+                            onClick={() => !isMyReview && setViewingUser(r.user)}>@{r.user}</span>
+                          <span style={{ fontSize: 10, color: "#333" }}>{formatDateFull(r.date)}</span>
+                        </div>
+                        <StarRating value={r.rating} size={13} />
+                        {r.text && <div style={{ fontSize: 13, color: "#aaa", marginTop: 8, lineHeight: 1.5 }}>{r.text}</div>}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                          <button onClick={() => !isMyReview && likeReview(selectedSnus, r)} style={{
+                            background: hasLiked ? "#1e1e1e" : "none",
+                            border: hasLiked ? "1px solid #e8b84b" : "1px solid #333",
+                            borderRadius: 6, padding: "4px 10px", cursor: isMyReview ? "default" : "pointer",
+                            color: hasLiked ? "#e8b84b" : "#555", fontSize: 12, display: "flex", alignItems: "center", gap: 4
+                          }}>
+                            👍 {likes.length > 0 ? likes.length : ""}
+                          </button>
+                          {isMyReview && (
+                            <button onClick={() => startEditReview(selectedSnus)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#666", fontSize: 12 }}>
+                              ✏️ Rediger
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
               </>
             )}
+
             <div style={{ borderTop: "1px solid #1e1e1e", marginTop: 20, paddingTop: 20 }}>
               {!submitted ? (
                 <>
-                  <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 }}>Din anmeldelse</div>
+                  <div style={s.sectionTitle}>{editingReview ? "Rediger din vurdering" : "Din anmeldelse"}</div>
                   <div style={{ display: "flex", justifyContent: "center", margin: "16px 0" }}>
                     <StarRating value={userRating} onChange={setUserRating} size={40} />
                   </div>
                   <textarea style={{ ...s.input, resize: "vertical", minHeight: 90 }} placeholder="Hva synes du?" value={reviewText} onChange={e => setReviewText(e.target.value)} />
-                  <button style={s.btn} onClick={submitReview}>Send inn</button>
-                  <button style={s.btnOutline} onClick={() => setSelectedSnus(null)}>Lukk</button>
+                  <button style={s.btn} onClick={submitReview}>{editingReview ? "Lagre endringer" : "Send inn"}</button>
+                  {editingReview && <button style={s.btnOutline} onClick={() => { setEditingReview(false); setUserRating(0); setReviewText(""); }}>Avbryt</button>}
+                  {!editingReview && <button style={s.btnOutline} onClick={() => setSelectedSnus(null)}>Lukk</button>}
                 </>
               ) : (
                 <div style={{ textAlign: "center", padding: "24px 0" }}>
                   <div style={{ fontSize: 48 }}>✅</div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#e8b84b", marginTop: 10 }}>Rating lagret!</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: "#e8b84b", marginTop: 10 }}>
+                    {editingReview ? "Vurdering oppdatert!" : "Rating lagret!"}
+                  </div>
                   <button style={{ ...s.btn, marginTop: 20 }} onClick={() => setSelectedSnus(null)}>Tilbake</button>
                 </div>
               )}
@@ -954,6 +1102,8 @@ export default function App() {
                 <input style={s.input} placeholder="f.eks. White Dry" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
                 <span style={s.label}>Styrke</span>
                 <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
+                <span style={s.label}>Beskrivelse (valgfritt)</span>
+                <input style={s.input} placeholder="f.eks. Klassisk tobakkssmak" value={newSnus.description || ""} onChange={e => setNewSnus({...newSnus, description: e.target.value})} />
                 <button style={{ ...s.btn, marginTop: 16 }} onClick={submitNewSnus}>Send til admin</button>
                 <button style={s.btnOutline} onClick={() => setShowAddForm(false)}>Avbryt</button>
               </>
