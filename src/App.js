@@ -497,6 +497,7 @@ export default function App() {
   const streakTitle = getStreakTitle(myStreak);
   const inviteTitle = getInviteTitle(userProfile?.inviteCount || 0);
   const myRefCode = userProfile?.refCode || "";
+  const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
 
   const filtered = snusList.filter(s => {
     const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase());
@@ -505,11 +506,7 @@ export default function App() {
     return matchSearch && matchStrength && matchType;
   });
 
-
-  // Count favorites from reviews data isn't available, so we'd need user data
-  // Instead show top rated with fav indicator
-  const topFavSnus = [...snusList].sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0)).slice(0, 10);
-
+  const topFavSnus = [...snusList].sort((a, b) => (b.favCount || 0) - (a.favCount || 0)).slice(0, 10);
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
 
   useEffect(() => {
@@ -545,7 +542,7 @@ export default function App() {
       if (snap.exists()) {
         const data = snap.data();
         if (!data.refCode) {
-          const refCode = generateRefCode(snap.data().displayName || uid);
+          const refCode = generateRefCode(data.displayName || uid);
           await updateDoc(doc(db, "users", uid), { refCode });
           data.refCode = refCode;
         }
@@ -635,9 +632,24 @@ export default function App() {
   };
 
   const saveProfile = async () => {
+    const oldFav = userProfile?.favoriteSnus || "";
+    const newFav = profileForm.favoriteSnus || "";
+    if (oldFav !== newFav) {
+      if (oldFav) {
+        const oldRef = doc(db, "snus", oldFav);
+        const oldSnap = await getDoc(oldRef);
+        if (oldSnap.exists()) await updateDoc(oldRef, { favCount: Math.max(0, (oldSnap.data().favCount || 0) - 1) });
+      }
+      if (newFav) {
+        const newRef = doc(db, "snus", newFav);
+        const newSnap = await getDoc(newRef);
+        if (newSnap.exists()) await updateDoc(newRef, { favCount: (newSnap.data().favCount || 0) + 1 });
+      }
+    }
     await setDoc(doc(db, "users", user.uid), { ...profileForm, displayName, displayNameLower: displayName.toLowerCase() }, { merge: true });
     setUserProfile({ ...profileForm, displayName });
     setEditingProfile(false);
+    fetchSnus();
   };
 
   const handleAuth = async () => {
@@ -713,7 +725,7 @@ export default function App() {
 
   const adminAddSnus = async () => {
     if (!adminNewSnus.name || !adminNewSnus.brand) return;
-    await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
     setAdminNewSnus({ name: "", brand: "", type: "", strength: "3", description: "" });
     fetchSnus(); alert("Snus lagt til!");
   };
@@ -725,7 +737,7 @@ export default function App() {
   };
 
   const approvePending = async (item) => {
-    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", description: item.description || "", avgRating: 0, totalRatings: 0, totalScore: 0, reviews: [], createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", description: item.description || "", avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
     if (item.submittedByUid) {
       const snap = await getDoc(doc(db, "users", item.submittedByUid));
@@ -755,8 +767,6 @@ export default function App() {
     const link = `https://snusrate.vercel.app?ref=${myRefCode}`;
     navigator.clipboard.writeText(link).then(() => alert("Invitasjonslenke kopiert! 🎉"));
   };
-
-  const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
 
   const s = {
     app: { fontFamily: "'Georgia', serif", background: "#0a0a0a", minHeight: "100vh", color: "#e8e0d0", maxWidth: 430, margin: "0 auto" },
@@ -913,7 +923,7 @@ export default function App() {
               <input style={{ ...s.searchBox, marginBottom: 0, flex: 1 }} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
               <button onClick={() => setShowScanner(true)} style={{ background: "#141414", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 10, padding: "0 16px", cursor: "pointer", fontSize: 20 }}>📷</button>
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
               <button style={s.filterBtn(!filterStrength)} onClick={() => setFilterStrength("")}>Alle styrker</button>
               {["1","2","3","4","5"].map(v => (
                 <button key={v} style={s.filterBtn(filterStrength === v)} onClick={() => setFilterStrength(filterStrength === v ? "" : v)}>{"🔥".repeat(Number(v))}</button>
@@ -992,8 +1002,7 @@ export default function App() {
 
         {tab === "favoritter" && (
           <>
-            <div style={s.sectionTitle}>Mest brukt som favoritt</div>
-            <div style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Basert på antall vurderinger</div>
+            <div style={s.sectionTitle}>Mest favorittmarkert</div>
             {topFavSnus.map((sn, i) => (
               <div key={sn.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(sn)}>
                 <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, width: 30, textAlign: "center" }}>
@@ -1005,8 +1014,8 @@ export default function App() {
                   <FlameStrength value={sn.strength} />
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{sn.totalRatings || 0}</div>
-                  <div style={{ fontSize: 10, color: "#444" }}>vurderinger</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>⭐ {sn.favCount || 0}</div>
+                  <div style={{ fontSize: 10, color: "#444" }}>favoritter</div>
                 </div>
               </div>
             ))}
@@ -1222,10 +1231,13 @@ export default function App() {
             <div style={{ fontSize: 12, color: "#555", marginBottom: 4 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
             <FlameStrength value={selectedSnus.strength} />
             {selectedSnus.description && <div style={{ fontSize: 13, color: "#666", marginTop: 8, fontStyle: "italic" }}>{selectedSnus.description}</div>}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0", flexWrap: "wrap" }}>
               <StarRating value={Math.round(selectedSnus.avgRating || 0)} size={18} />
               <span style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(selectedSnus.avgRating || 0).toFixed(1)}</span>
               <span style={{ fontSize: 12, color: "#444" }}>({selectedSnus.totalRatings || 0} anmeldelser)</span>
+              {(selectedSnus.favCount || 0) > 0 && (
+                <span style={{ fontSize: 12, color: "#555" }}>⭐ {selectedSnus.favCount} favoritt{selectedSnus.favCount !== 1 ? "er" : ""}</span>
+              )}
             </div>
             {selectedSnus.reviews?.length > 0 && (
               <>
