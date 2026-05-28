@@ -5,9 +5,7 @@ import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, arrayUnion
 import { BrowserMultiFormatReader } from "@zxing/library";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
-
 const AVATARS = ["🤠","🔥","❄️","💨","🌿","⚡","🎯","🏆","👑","💪","🌶️","🧊","🍃","🌲","⛰️","🌊","🏔️","🎖️","⭐","💎","🔱","⚜️","🌨️","🍀","🌑","🌙","☄️","🗡️","🛡️","🔮"];
-
 const COUNTRY_FLAGS = { "Norge": "🇳🇴", "Sverige": "🇸🇪", "Danmark": "🇩🇰", "Finland": "🇫🇮", "Annet": "🌍" };
 
 const PRIVACY_POLICY = `PERSONVERNERKLÆRING FOR SNUSRATE
@@ -97,24 +95,17 @@ const calculateStreak = (reviews) => {
   for (let d of unique) {
     const day = new Date(d);
     const diff = Math.round((current - day) / (1000 * 60 * 60 * 24));
-    if (diff <= 1) { streak++; current = day; }
-    else break;
+    if (diff <= 1) { streak++; current = day; } else break;
   }
   return streak;
 };
 
-const countLikesReceived = (reviews) => {
-  return reviews.reduce((sum, r) => sum + (r.likes?.length || 0), 0);
-};
+const countLikesReceived = (reviews) => reviews.reduce((sum, r) => sum + (r.likes?.length || 0), 0);
 
 function FlameStrength({ value }) {
   const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
   const count = levels[value] || 3;
-  return (
-    <span style={{ fontSize: 12 }}>
-      {[1,2,3,4,5].map(i => <span key={i} style={{ opacity: i <= count ? 1 : 0.15 }}>🔥</span>)}
-    </span>
-  );
+  return <span style={{ fontSize: 12 }}>{[1,2,3,4,5].map(i => <span key={i} style={{ opacity: i <= count ? 1 : 0.15 }}>🔥</span>)}</span>;
 }
 
 function StarRating({ value, onChange, size = 20 }) {
@@ -122,11 +113,8 @@ function StarRating({ value, onChange, size = 20 }) {
   return (
     <div style={{ display: "flex", gap: 2 }}>
       {[1,2,3,4,5].map(i => (
-        <span key={i} onClick={() => onChange && onChange(i)}
-          onMouseEnter={() => onChange && setHover(i)}
-          onMouseLeave={() => onChange && setHover(0)}
-          style={{ fontSize: size, cursor: onChange ? "pointer" : "default",
-            color: i <= (hover || value) ? "#e8b84b" : "#2a2a2a", transition: "color 0.15s", userSelect: "none" }}>★</span>
+        <span key={i} onClick={() => onChange && onChange(i)} onMouseEnter={() => onChange && setHover(i)} onMouseLeave={() => onChange && setHover(0)}
+          style={{ fontSize: size, cursor: onChange ? "pointer" : "default", color: i <= (hover || value) ? "#e8b84b" : "#2a2a2a", transition: "color 0.15s", userSelect: "none" }}>★</span>
       ))}
     </div>
   );
@@ -136,11 +124,7 @@ function StrengthSelector({ value, onChange }) {
   return (
     <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
       {[1,2,3,4,5].map(i => (
-        <button key={i} onClick={() => onChange(String(i))} style={{
-          background: value === String(i) ? "#1e1e1e" : "none",
-          border: value === String(i) ? "1px solid #e8b84b" : "1px solid #2a2a2a",
-          borderRadius: 6, padding: "7px 10px", cursor: "pointer", fontSize: 13
-        }}>{"🔥".repeat(i)}</button>
+        <button key={i} onClick={() => onChange(String(i))} style={{ background: value === String(i) ? "#1e1e1e" : "none", border: value === String(i) ? "1px solid #e8b84b" : "1px solid #2a2a2a", borderRadius: 6, padding: "7px 10px", cursor: "pointer", fontSize: 13 }}>{"🔥".repeat(i)}</button>
       ))}
     </div>
   );
@@ -148,16 +132,10 @@ function StrengthSelector({ value, onChange }) {
 
 function AvatarPicker({ selected, onSelect }) {
   return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {AVATARS.map(av => (
-          <button key={av} onClick={() => onSelect(av)} style={{
-            fontSize: 28, background: selected === av ? "#1e1e1e" : "none",
-            border: selected === av ? "2px solid #e8b84b" : "2px solid transparent",
-            borderRadius: 10, padding: "6px 8px", cursor: "pointer", lineHeight: 1
-          }}>{av}</button>
-        ))}
-      </div>
+    <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {AVATARS.map(av => (
+        <button key={av} onClick={() => onSelect(av)} style={{ fontSize: 28, background: selected === av ? "#1e1e1e" : "none", border: selected === av ? "2px solid #e8b84b" : "2px solid transparent", borderRadius: 10, padding: "6px 8px", cursor: "pointer", lineHeight: 1 }}>{av}</button>
+      ))}
     </div>
   );
 }
@@ -217,13 +195,8 @@ function LiveTicker({ allReviews, onClickReview }) {
     <div onClick={() => onClickReview(r)} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 14px", marginBottom: 14, cursor: "pointer", opacity: visible ? 1 : 0, transition: "opacity 0.3s", display: "flex", alignItems: "center", gap: 10 }}>
       <div style={{ fontSize: 18 }}>🔴</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, color: "#e8b84b", fontWeight: 700 }}>
-          {r.avatar || "🤠"} @{r.user} ratet <span style={{ color: "#e8e0d0" }}>{r.snusName}</span>
-        </div>
-        <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>
-          {"★".repeat(r.rating)}{"☆".repeat(5-r.rating)} · {formatDate(r.date)}
-          {r.text && <span style={{ color: "#666" }}> · "{r.text.slice(0,30)}{r.text.length > 30 ? "..." : ""}"</span>}
-        </div>
+        <div style={{ fontSize: 12, color: "#e8b84b", fontWeight: 700 }}>{r.avatar || "🤠"} @{r.user} ratet <span style={{ color: "#e8e0d0" }}>{r.snusName}</span></div>
+        <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)} · {formatDate(r.date)}{r.text && <span style={{ color: "#666" }}> · "{r.text.slice(0,30)}{r.text.length > 30 ? "..." : ""}"</span>}</div>
       </div>
     </div>
   );
@@ -370,8 +343,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
               <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
                 {COUNTRY_FLAGS[profile.country] || "🌍"} {profile.city ? `${profile.city}, ` : ""}{profile.country}
-                {profile.age ? ` · ${profile.age} år` : ""}
-                {profile.gender ? ` · ${profile.gender}` : ""}
+                {profile.age ? ` · ${profile.age} år` : ""}{profile.gender ? ` · ${profile.gender}` : ""}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
                 <span style={st.badge}>{getRatingTitle(userReviews.length)}</span>
@@ -458,6 +430,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [snusList, setSnusList] = useState([]);
   const [pendingList, setPendingList] = useState([]);
+  const [reportedList, setReportedList] = useState([]);
   const [selectedSnus, setSelectedSnus] = useState(null);
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -507,7 +480,7 @@ export default function App() {
     fetchSnus();
   }, []);
 
-  useEffect(() => { if (isAdmin) fetchPending(); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); } }, [isAdmin]);
 
   const fetchSnus = async () => {
     try {
@@ -519,6 +492,11 @@ export default function App() {
   const fetchPending = async () => {
     const snap = await getDocs(collection(db, "snus_pending"));
     setPendingList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
+
+  const fetchReported = async () => {
+    const snap = await getDocs(collection(db, "reported_reviews"));
+    setReportedList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   const fetchUserProfile = async (uid) => {
@@ -546,6 +524,48 @@ export default function App() {
       const all = [...snap1.docs.map(d => d.data()), ...snap2.docs.map(d => d.data())];
       setBuddies(all.map(b => b.fromUid === uid ? { name: b.toName, uid: b.toUid, avatar: b.toAvatar } : { name: b.fromName, uid: b.fromUid, avatar: b.fromAvatar }));
     } catch(e) {}
+  };
+
+  const reportReview = async (snus, review) => {
+    try {
+      const existing = await getDocs(query(collection(db, "reported_reviews"), where("snusId", "==", snus.id), where("reviewUser", "==", review.user), where("reviewDate", "==", review.date)));
+      if (!existing.empty) { alert("Du har allerede rapportert denne vurderingen!"); return; }
+      await addDoc(collection(db, "reported_reviews"), {
+        snusId: snus.id, snusName: snus.name,
+        reviewUser: review.user, reviewText: review.text || "", reviewRating: review.rating, reviewDate: review.date,
+        reportedBy: displayName, reportedAt: new Date().toISOString()
+      });
+      alert("Vurdering rapportert til admin! 🚩");
+    } catch(e) {}
+  };
+
+  const deleteReview = async (snus, review) => {
+    if (!window.confirm(`Slett vurdering fra @${review.user}?`)) return;
+    const newReviews = snus.reviews.filter(r => !(r.user === review.user && r.date === review.date));
+    const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
+    await updateDoc(doc(db, "snus", snus.id), {
+      reviews: newReviews,
+      totalRatings: newReviews.length,
+      totalScore,
+      avgRating: newReviews.length > 0 ? totalScore / newReviews.length : 0
+    });
+    setSelectedSnus(prev => prev ? { ...prev, reviews: newReviews } : null);
+    fetchSnus();
+  };
+
+  const dismissReport = async (reportId) => {
+    await deleteDoc(doc(db, "reported_reviews", reportId));
+    fetchReported();
+  };
+
+  const deleteReportedReview = async (report) => {
+    const snusDoc = snusList.find(s => s.id === report.snusId);
+    if (!snusDoc) return;
+    const newReviews = snusDoc.reviews.filter(r => !(r.user === report.reviewUser && r.date === report.reviewDate));
+    const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
+    await updateDoc(doc(db, "snus", report.snusId), { reviews: newReviews, totalRatings: newReviews.length, totalScore, avgRating: newReviews.length > 0 ? totalScore / newReviews.length : 0 });
+    await deleteDoc(doc(db, "reported_reviews", report.id));
+    fetchReported(); fetchSnus();
   };
 
   const searchBuddies = async () => {
@@ -736,8 +756,7 @@ export default function App() {
             <input style={s.input} type="number" min="18" max="99" value={age} onChange={e => setAge(e.target.value)} placeholder="Din alder" />
             <span style={s.label}>Kjønn</span>
             <select style={s.select} value={gender} onChange={e => setGender(e.target.value)}>
-              <option value="">Velg kjønn</option>
-              <option>Mann</option><option>Kvinne</option><option>Annet</option>
+              <option value="">Velg kjønn</option><option>Mann</option><option>Kvinne</option><option>Annet</option>
             </select>
             <span style={s.label}>Land</span>
             <select style={s.select} value={country} onChange={e => setCountry(e.target.value)}>
@@ -882,8 +901,7 @@ export default function App() {
               {userProfile && (
                 <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
                   {COUNTRY_FLAGS[userProfile.country] || "🌍"} {userProfile.city ? `${userProfile.city}, ` : ""}{userProfile.country}
-                  {userProfile.age ? ` · ${userProfile.age} år` : ""}
-                  {userProfile.gender ? ` · ${userProfile.gender}` : ""}
+                  {userProfile.age ? ` · ${userProfile.age} år` : ""}{userProfile.gender ? ` · ${userProfile.gender}` : ""}
                 </div>
               )}
               {isAdmin && <div style={{ fontSize: 10, color: "#e8b84b", marginTop: 6, letterSpacing: 2.5, fontWeight: 700 }}>⚡ ADMIN</div>}
@@ -895,26 +913,18 @@ export default function App() {
             </div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              <div style={s.statBox}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myReviews.length}</div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Vurderinger</div>
-              </div>
-              <div style={s.statBox}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myAvgRating}</div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Snitt</div>
-              </div>
-              <div style={s.statBox}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myLikesReceived}</div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Likes</div>
-              </div>
-              <div style={s.statBox}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{myStreak}🔥</div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Streak</div>
-              </div>
-              <div style={s.statBox} onClick={() => setShowBuddyList(true)}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{buddies.length}</div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Buddies</div>
-              </div>
+              {[
+                [myReviews.length, "Vurderinger", null],
+                [myAvgRating, "Snitt", null],
+                [myLikesReceived, "Likes", null],
+                [`${myStreak}🔥`, "Streak", null],
+                [buddies.length, "Buddies", () => setShowBuddyList(true)]
+              ].map(([val, label, onClick], i) => (
+                <div key={i} style={{ ...s.statBox, padding: "10px 6px" }} onClick={onClick}>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
+                  <div style={{ fontSize: 8, color: "#555", marginTop: 3, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+                </div>
+              ))}
             </div>
 
             {favSnusObj && (
@@ -1040,6 +1050,21 @@ export default function App() {
               </div>
             )}
 
+            {reportedList.length > 0 && (
+              <>
+                <div style={{ ...s.sectionTitle, marginTop: 32, color: "#cb7e7e" }}>🚩 Rapporterte vurderinger ({reportedList.length})</div>
+                {reportedList.map(report => (
+                  <div key={report.id} style={{ ...s.pendingCard, border: "1px solid #5a2d2d" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#cb7e7e" }}>@{report.reviewUser} – {report.snusName}</div>
+                    <div style={{ fontSize: 12, color: "#888", margin: "4px 0" }}>{report.reviewText || "(ingen tekst)"}</div>
+                    <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>Rapportert av @{report.reportedBy}</div>
+                    <button style={s.btnGreen} onClick={() => dismissReport(report.id)}>✓ Ignorer</button>
+                    <button style={{ ...s.btnRed, marginLeft: 8 }} onClick={() => deleteReportedReview(report)}>🗑️ Slett vurdering</button>
+                  </div>
+                ))}
+              </>
+            )}
+
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>Alle produkter ({snusList.length})</div>
             {snusList.map(sn => (
               <div key={sn.id} style={{ ...s.pendingCard, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1096,10 +1121,18 @@ export default function App() {
                       <StarRating value={r.rating} size={13} />
                       {r.text && <div style={{ fontSize: 13, color: "#aaa", marginTop: 8, lineHeight: 1.5 }}>{r.text}</div>}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-                        <button onClick={() => !isMyReview && likeReview(selectedSnus, r)} style={{ background: hasLiked ? "#1e1e1e" : "none", border: hasLiked ? "1px solid #e8b84b" : "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: isMyReview ? "default" : "pointer", color: hasLiked ? "#e8b84b" : "#555", fontSize: 12 }}>
-                          👍 {likes.length > 0 ? likes.length : ""}
-                        </button>
-                        {isMyReview && <button onClick={() => startEditReview(selectedSnus)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#666", fontSize: 12 }}>✏️ Rediger</button>}
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => !isMyReview && likeReview(selectedSnus, r)} style={{ background: hasLiked ? "#1e1e1e" : "none", border: hasLiked ? "1px solid #e8b84b" : "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: isMyReview ? "default" : "pointer", color: hasLiked ? "#e8b84b" : "#555", fontSize: 12 }}>
+                            👍 {likes.length > 0 ? likes.length : ""}
+                          </button>
+                          {!isMyReview && (
+                            <button onClick={() => reportReview(selectedSnus, r)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#555", fontSize: 12 }}>🚩</button>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {isMyReview && <button onClick={() => startEditReview(selectedSnus)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#666", fontSize: 12 }}>✏️ Rediger</button>}
+                          {isAdmin && <button onClick={() => deleteReview(selectedSnus, r)} style={{ background: "none", border: "1px solid #5a2d2d", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#cb7e7e", fontSize: 12 }}>🗑️</button>}
+                        </div>
                       </div>
                     </div>
                   );
