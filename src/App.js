@@ -454,6 +454,8 @@ export default function App() {
   const [snusList, setSnusList] = useState([]);
   const [pendingList, setPendingList] = useState([]);
   const [reportedList, setReportedList] = useState([]);
+  const [userList, setUserList] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
   const [selectedSnus, setSelectedSnus] = useState(null);
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -509,6 +511,12 @@ export default function App() {
   const topFavSnus = [...snusList].sort((a, b) => (b.favCount || 0) - (a.favCount || 0)).slice(0, 10);
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
 
+  const filteredUsers = userList.filter(u =>
+    u.displayName?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.city?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.country?.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
   useEffect(() => {
     onAuthStateChanged(auth, u => {
       setUser(u);
@@ -517,7 +525,7 @@ export default function App() {
     fetchSnus();
   }, []);
 
-  useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); } }, [isAdmin]);
+  useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); fetchUsers(); } }, [isAdmin]);
 
   const fetchSnus = async () => {
     try {
@@ -534,6 +542,13 @@ export default function App() {
   const fetchReported = async () => {
     const snap = await getDocs(collection(db, "reported_reviews"));
     setReportedList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      setUserList(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+    } catch(e) {}
   };
 
   const fetchUserProfile = async (uid) => {
@@ -774,7 +789,8 @@ export default function App() {
     logo: { fontSize: 24, fontWeight: 700, color: "#e8b84b", letterSpacing: -0.5 },
     logoSub: { fontSize: 9, letterSpacing: 3.5, color: "#555", textTransform: "uppercase", marginTop: 1 },
     nav: { display: "flex", borderBottom: "1px solid #1a1a1a", background: "#0f0f0f", overflowX: "auto" },
-navBtn: (a) => ({ flex: 1, padding: "14px 4px", background: a ? "#111" : "none", border: "none", color: a ? "#e8b84b" : "#666", fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", cursor: "pointer", borderBottom: a ? "2px solid #e8b84b" : "2px solid transparent", whiteSpace: "nowrap" }),    content: { padding: "16px 16px 80px" },
+    navBtn: (a) => ({ flex: 1, padding: "16px 6px", background: a ? "#111" : "none", border: "none", color: a ? "#e8b84b" : "#666", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: a ? "3px solid #e8b84b" : "3px solid transparent", whiteSpace: "nowrap" }),
+    content: { padding: "16px 16px 80px" },
     card: { background: "#141414", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
@@ -1148,6 +1164,46 @@ navBtn: (a) => ({ flex: 1, padding: "14px 4px", background: a ? "#111" : "none",
 
         {tab === "admin" && isAdmin && (
           <>
+            {/* BRUKER OVERSIKT */}
+            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={s.sectionTitle}>👥 Brukere ({userList.length})</div>
+                <button onClick={fetchUsers} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12 }}>↻ Oppdater</button>
+              </div>
+              <div style={{ display: "flex", gap: 20, marginBottom: 12 }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{userList.length}</div>
+                  <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase" }}>Brukere</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{allReviews.length}</div>
+                  <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase" }}>Vurderinger</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{snusList.length}</div>
+                  <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase" }}>Produkter</div>
+                </div>
+              </div>
+              <input style={{ ...s.input, marginTop: 0 }} placeholder="🔍 Søk brukernavn, by, land..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+              <div style={{ marginTop: 10, maxHeight: 300, overflowY: "auto" }}>
+                {filteredUsers.map((u, i) => {
+                  const reviewCount = snusList.flatMap(sn => sn.reviews || []).filter(r => r.user === u.displayName).length;
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => setViewingUser(u.displayName)}>
+                      <div style={{ fontSize: 24 }}>{u.avatar || "🤠"}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>@{u.displayName}</div>
+                        <div style={{ fontSize: 11, color: "#555" }}>{COUNTRY_FLAGS[u.country] || "🌍"} {u.city ? `${u.city}, ` : ""}{u.country}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 12, color: "#666" }}>{reviewCount} ratings</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div style={s.sectionTitle}>Legg til ny snus</div>
             <span style={s.label}>Produktnavn</span>
             <input style={s.input} placeholder="f.eks. General White" value={adminNewSnus.name} onChange={e => setAdminNewSnus({...adminNewSnus, name: e.target.value})} />
