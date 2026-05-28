@@ -6,6 +6,8 @@ import { BrowserMultiFormatReader } from "@zxing/library";
 
 const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 
+const AVATARS = ["🤠","🔥","❄️","💨","🌿","⚡","🎯","🏆","👑","💪","🌶️","🧊","🍃","🌲","⛰️","🌊","🏔️","🎖️","⭐","💎","🔱","⚜️","🌨️","🍀","🌑","🌙","☄️","🗡️","🛡️","🔮"];
+
 const PRIVACY_POLICY = `PERSONVERNERKLÆRING FOR SNUSRATE
 
 Sist oppdatert: Mai 2026
@@ -113,6 +115,22 @@ const formatDateFull = (iso) => {
   const d = new Date(iso);
   return d.toLocaleDateString("no-NO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
+
+function AvatarPicker({ selected, onSelect }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {AVATARS.map(av => (
+          <button key={av} onClick={() => onSelect(av)} style={{
+            fontSize: 28, background: selected === av ? "#1e1e1e" : "none",
+            border: selected === av ? "2px solid #e8b84b" : "2px solid transparent",
+            borderRadius: 10, padding: "6px 8px", cursor: "pointer", lineHeight: 1
+          }}>{av}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function HamburgerMenu({ onClose }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -348,7 +366,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
         ) : (
           <>
             <div style={{ textAlign: "center", paddingBottom: 16 }}>
-              <div style={{ fontSize: 48, marginBottom: 10 }}>🤠</div>
+              <div style={{ fontSize: 56, marginBottom: 10 }}>{profile.avatar || "🤠"}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
               <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
                 {profile.city ? `${profile.city}, ` : ""}{profile.country}
@@ -412,7 +430,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         {buddies.length === 0 && <div style={{ color: "#555", fontSize: 13, textAlign: "center", padding: 20 }}>Ingen Snusbuddies ennå</div>}
         {buddies.map((b, i) => (
           <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }} onClick={() => onSelectBuddy(b.name)}>
-            <div style={{ fontSize: 28 }}>🤠</div>
+            <div style={{ fontSize: 28 }}>{b.avatar || "🤠"}</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b84b" }}>@{b.name}</div>
           </div>
         ))}
@@ -432,6 +450,7 @@ export default function App() {
   const [gender, setGender] = useState("");
   const [country, setCountry] = useState("Norge");
   const [city, setCity] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState("🤠");
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [showPrivacyInReg, setShowPrivacyInReg] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -453,7 +472,7 @@ export default function App() {
   const [barcodeMatched, setBarcodeMatched] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({ country: "Norge", city: "", gender: "", age: "", favoriteSnus: "" });
+  const [profileForm, setProfileForm] = useState({ country: "Norge", city: "", gender: "", age: "", favoriteSnus: "", avatar: "🤠" });
   const [buddySearch, setBuddySearch] = useState("");
   const [buddyResults, setBuddyResults] = useState([]);
   const [buddyRequests, setBuddyRequests] = useState([]);
@@ -465,6 +484,7 @@ export default function App() {
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
+  const myAvatar = userProfile?.avatar || "🤠";
 
   const myReviews = snusList.flatMap(s =>
     (s.reviews || []).filter(r => r.user === displayName).map(r => ({ ...r, snusId: s.id, snusName: s.name }))
@@ -526,7 +546,7 @@ export default function App() {
         getDocs(query(collection(db, "buddy_requests"), where("toUid", "==", uid), where("status", "==", "accepted")))
       ]);
       const all = [...snap1.docs.map(d => d.data()), ...snap2.docs.map(d => d.data())];
-      setBuddies(all.map(b => b.fromUid === uid ? { name: b.toName, uid: b.toUid } : { name: b.fromName, uid: b.fromUid }));
+      setBuddies(all.map(b => b.fromUid === uid ? { name: b.toName, uid: b.toUid, avatar: b.toAvatar } : { name: b.fromName, uid: b.fromUid, avatar: b.fromAvatar }));
     } catch(e) {}
   };
 
@@ -543,7 +563,11 @@ export default function App() {
     try {
       const existing = await getDocs(query(collection(db, "buddy_requests"), where("fromUid", "==", user.uid), where("toUid", "==", toUser.uid)));
       if (!existing.empty) { alert("Forespørsel allerede sendt!"); return; }
-      await addDoc(collection(db, "buddy_requests"), { fromUid: user.uid, fromName: displayName, toUid: toUser.uid, toName: toUser.displayName, status: "pending", createdAt: new Date().toISOString() });
+      await addDoc(collection(db, "buddy_requests"), {
+        fromUid: user.uid, fromName: displayName, fromAvatar: myAvatar,
+        toUid: toUser.uid, toName: toUser.displayName, toAvatar: toUser.avatar || "🤠",
+        status: "pending", createdAt: new Date().toISOString()
+      });
       alert(`Snusbuddy-forespørsel sendt til @${toUser.displayName}! 🤠`);
     } catch(e) {}
   };
@@ -578,7 +602,8 @@ export default function App() {
         await updateProfile(result.user, { displayName: username.trim() });
         await setDoc(doc(db, "users", result.user.uid), {
           displayName: username.trim(), displayNameLower: username.trim().toLowerCase(),
-          age: ageNum, gender, country, city, favoriteSnus: "", approvedProducts: 0
+          age: ageNum, gender, country, city, avatar: selectedAvatar,
+          favoriteSnus: "", approvedProducts: 0
         });
         setUser({ ...result.user, displayName: username.trim() });
       } else {
@@ -604,7 +629,7 @@ export default function App() {
       await updateDoc(snusRef, { reviews: newReviews, totalScore, avgRating: totalScore / newReviews.length });
     } else {
       await updateDoc(snusRef, {
-        reviews: arrayUnion({ user: displayName, rating: userRating, text: reviewText, date: new Date().toISOString(), likes: [] }),
+        reviews: arrayUnion({ user: displayName, avatar: myAvatar, rating: userRating, text: reviewText, date: new Date().toISOString(), likes: [] }),
         totalRatings: (selectedSnus.totalRatings || 0) + 1,
         totalScore: (selectedSnus.totalScore || 0) + userRating,
         avgRating: ((selectedSnus.totalScore || 0) + userRating) / ((selectedSnus.totalRatings || 0) + 1),
@@ -730,6 +755,8 @@ export default function App() {
           <>
             <span style={s.label}>Brukernavn</span>
             <input style={s.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="f.eks. SnusKongen_Oslo" />
+            <span style={s.label}>Velg avatar</span>
+            <AvatarPicker selected={selectedAvatar} onSelect={setSelectedAvatar} />
             <span style={s.label}>Alder (må være 18+)</span>
             <input style={s.input} type="number" min="18" max="99" value={age} onChange={e => setAge(e.target.value)} placeholder="Din alder" />
             <span style={s.label}>Kjønn</span>
@@ -843,7 +870,8 @@ export default function App() {
             {allReviews.map((r, i) => (
               <div key={i} style={s.reviewCard}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 18 }}>{r.avatar || "🤠"}</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }} onClick={() => r.user !== displayName && setViewingUser(r.user)}>@{r.user}</span>
                     <span style={{ fontSize: 12, color: "#555" }}> ratet </span>
                     <span style={{ fontSize: 13, fontWeight: 700, cursor: "pointer" }} onClick={() => openSnus(snusList.find(sn => sn.id === r.snusId))}>{r.snusName}</span>
@@ -882,7 +910,7 @@ export default function App() {
         {tab === "profil" && (
           <>
             <div style={{ textAlign: "center", padding: "32px 0 20px" }}>
-              <div style={{ fontSize: 52, marginBottom: 12 }}>🤠</div>
+              <div style={{ fontSize: 64, marginBottom: 12 }}>{myAvatar}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{user.displayName || "ukjent"}</div>
               {userProfile && (
                 <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
@@ -929,7 +957,10 @@ export default function App() {
                 <div style={s.sectionTitle}>🤠 Snusbuddy-forespørsler ({buddyRequests.length})</div>
                 {buddyRequests.map(req => (
                   <div key={req.id} style={s.buddyCard}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }} onClick={() => setViewingUser(req.fromName)}>@{req.fromName}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 24 }}>{req.fromAvatar || "🤠"}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b", cursor: "pointer" }} onClick={() => setViewingUser(req.fromName)}>@{req.fromName}</span>
+                    </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button style={s.btnGreen} onClick={() => acceptBuddy(req)}>✓ Godta</button>
                       <button style={s.btnRed} onClick={() => rejectBuddy(req)}>✗ Avvis</button>
@@ -947,9 +978,12 @@ export default function App() {
               </div>
               {buddyResults.map((u, i) => (
                 <div key={i} style={{ ...s.buddyCard, marginTop: 8 }}>
-                  <div style={{ cursor: "pointer" }} onClick={() => setViewingUser(u.displayName)}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{u.displayName}</div>
-                    <div style={{ fontSize: 11, color: "#555" }}>{u.city ? `${u.city}, ` : ""}{u.country}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => setViewingUser(u.displayName)}>
+                    <span style={{ fontSize: 24 }}>{u.avatar || "🤠"}</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{u.displayName}</div>
+                      <div style={{ fontSize: 11, color: "#555" }}>{u.city ? `${u.city}, ` : ""}{u.country}</div>
+                    </div>
                   </div>
                   <button style={s.btnSmall} onClick={() => sendBuddyRequest(u)}>+ Snusbuddy</button>
                 </div>
@@ -961,6 +995,8 @@ export default function App() {
             ) : (
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16, marginBottom: 16 }}>
                 <div style={s.sectionTitle}>Rediger profil</div>
+                <span style={s.label}>Avatar</span>
+                <AvatarPicker selected={profileForm.avatar || "🤠"} onSelect={v => setProfileForm({...profileForm, avatar: v})} />
                 <span style={s.label}>Land</span>
                 <select style={s.select} value={profileForm.country} onChange={e => setProfileForm({...profileForm, country: e.target.value})}>
                   <option>Norge</option><option>Sverige</option><option>Danmark</option><option>Finland</option><option>Annet</option>
@@ -1078,7 +1114,10 @@ export default function App() {
                   return (
                     <div key={i} style={s.reviewCard}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: isMyReview ? "default" : "pointer" }} onClick={() => !isMyReview && setViewingUser(r.user)}>@{r.user}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 18 }}>{r.avatar || "🤠"}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", cursor: isMyReview ? "default" : "pointer" }} onClick={() => !isMyReview && setViewingUser(r.user)}>@{r.user}</span>
+                        </div>
                         <span style={{ fontSize: 10, color: "#333" }}>{formatDateFull(r.date)}</span>
                       </div>
                       <StarRating value={r.rating} size={13} />
