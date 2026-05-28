@@ -160,6 +160,51 @@ function AvatarPicker({ selected, onSelect }) {
   );
 }
 
+function InstallBanner({ onDismiss }) {
+  const [isIOS, setIsIOS] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    setIsIOS(/iPhone|iPad|iPod/.test(ua));
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const installAndroid = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      onDismiss();
+    }
+  };
+
+  return (
+    <div style={{ background: "#141414", border: "1px solid #e8b84b", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b", marginBottom: 8 }}>📱 Legg til på hjemskjerm</div>
+        <button onClick={onDismiss} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18 }}>✕</button>
+      </div>
+      {isIOS && (
+        <div style={{ fontSize: 12, color: "#888", lineHeight: 1.8 }}>
+          1. Trykk på <span style={{ color: "#e8b84b" }}>dele-ikonet</span> nederst i Safari<br/>
+          2. Scroll ned og trykk <span style={{ color: "#e8b84b" }}>"Legg til på hjemskjerm"</span><br/>
+          3. Trykk <span style={{ color: "#e8b84b" }}>"Legg til"</span> øverst til høyre
+        </div>
+      )}
+      {!isIOS && deferredPrompt && (
+        <button onClick={installAndroid} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 4 }}>
+          Installer SnusRate
+        </button>
+      )}
+      {!isIOS && !deferredPrompt && (
+        <div style={{ fontSize: 12, color: "#888" }}>Åpne i Safari (iPhone) eller Chrome (Android) for å installere.</div>
+      )}
+    </div>
+  );
+}
 function HamburgerMenu({ onClose }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const st = {
@@ -933,6 +978,12 @@ export default function App() {
       <div style={s.content}>
         {tab === "explore" && (
           <>
+          {!localStorage.getItem("snusrate_install_dismissed") && (
+  <InstallBanner onDismiss={() => {
+    localStorage.setItem("snusrate_install_dismissed", "1");
+    window.location.reload();
+  }} />
+)}
             <LiveTicker allReviews={allReviews} onClickReview={r => openSnus(snusList.find(sn => sn.id === r.snusId))} />
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input style={{ ...s.searchBox, marginBottom: 0, flex: 1 }} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
