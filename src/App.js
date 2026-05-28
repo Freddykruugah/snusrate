@@ -8,6 +8,22 @@ const ADMIN_EMAIL = "fredrik-nielsen@hotmail.com";
 const AVATARS = ["🤠","🔥","❄️","💨","🌿","⚡","🎯","🏆","👑","💪","🌶️","🧊","🍃","🌲","⛰️","🌊","🏔️","🎖️","⭐","💎","🔱","⚜️","🌨️","🍀","🌑","🌙","☄️","🗡️","🛡️","🔮"];
 const COUNTRY_FLAGS = { "Norge": "🇳🇴", "Sverige": "🇸🇪", "Danmark": "🇩🇰", "Finland": "🇫🇮", "Annet": "🌍" };
 
+const INVITE_TITLES = [
+  { count: 1, title: "📣 Snusmisjonær" },
+  { count: 3, title: "🌟 Snusambasadør" },
+  { count: 5, title: "🔥 Snussprer" },
+  { count: 10, title: "💪 Snusrekrutterer" },
+  { count: 20, title: "🏆 Snusgeneral" },
+  { count: 50, title: "👑 Snuslegende" },
+  { count: 100, title: "🐐 Snusguden" },
+];
+
+const getInviteTitle = (count) => {
+  let title = null;
+  for (const t of INVITE_TITLES) { if (count >= t.count) title = t.title; }
+  return title;
+};
+
 const PRIVACY_POLICY = `PERSONVERNERKLÆRING FOR SNUSRATE
 
 Sist oppdatert: Mai 2026
@@ -101,6 +117,10 @@ const calculateStreak = (reviews) => {
 };
 
 const countLikesReceived = (reviews) => reviews.reduce((sum, r) => sum + (r.likes?.length || 0), 0);
+
+const generateRefCode = (displayName) => {
+  return displayName.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.random().toString(36).slice(2, 6);
+};
 
 function FlameStrength({ value }) {
   const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
@@ -318,6 +338,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
   const favSnusObj = snusList.find(s => s.id === profile?.favoriteSnus);
   const streak = calculateStreak(userReviews);
   const likesReceived = countLikesReceived(userReviews);
+  const inviteTitle = getInviteTitle(profile?.inviteCount || 0);
 
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
@@ -349,6 +370,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
                 <span style={st.badge}>{getRatingTitle(userReviews.length)}</span>
                 {getProductTitle(profile.approvedProducts || 0) && <span style={st.badge}>{getProductTitle(profile.approvedProducts || 0)}</span>}
                 {getStreakTitle(streak) && <span style={st.badge}>{getStreakTitle(streak)}</span>}
+                {inviteTitle && <span style={st.badge}>{inviteTitle}</span>}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -428,6 +450,7 @@ export default function App() {
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [showPrivacyInReg, setShowPrivacyInReg] = useState(false);
   const [authMode, setAuthMode] = useState("login");
+  const [refCodeInput, setRefCodeInput] = useState("");
   const [snusList, setSnusList] = useState([]);
   const [pendingList, setPendingList] = useState([]);
   const [reportedList, setReportedList] = useState([]);
@@ -442,6 +465,8 @@ export default function App() {
   const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "" });
   const [editingSnus, setEditingSnus] = useState(null);
   const [search, setSearch] = useState("");
+  const [filterStrength, setFilterStrength] = useState("");
+  const [filterType, setFilterType] = useState("");
   const [showScanner, setShowScanner] = useState(false);
   const [unknownBarcode, setUnknownBarcode] = useState(null);
   const [barcodeMatched, setBarcodeMatched] = useState(false);
@@ -456,6 +481,7 @@ export default function App() {
   const [viewingUser, setViewingUser] = useState(null);
   const [showBuddyList, setShowBuddyList] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -469,7 +495,26 @@ export default function App() {
   const ratingTitle = getRatingTitle(myReviews.length);
   const productTitle = getProductTitle(userProfile?.approvedProducts || 0);
   const streakTitle = getStreakTitle(myStreak);
-  const filtered = snusList.filter(s => s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase()));
+  const inviteTitle = getInviteTitle(userProfile?.inviteCount || 0);
+  const myRefCode = userProfile?.refCode || "";
+
+  const filtered = snusList.filter(s => {
+    const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase());
+    const matchStrength = !filterStrength || s.strength === filterStrength;
+    const matchType = !filterType || s.type?.toLowerCase().includes(filterType.toLowerCase());
+    return matchSearch && matchStrength && matchType;
+  });
+
+  const favTopList = snusList.map(sn => ({
+    ...sn,
+    favCount: snusList.flatMap(s => []).length
+  }));
+
+  const snusFavCount = {};
+  // Count favorites from reviews data isn't available, so we'd need user data
+  // Instead show top rated with fav indicator
+  const topFavSnus = [...snusList].sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0)).slice(0, 10);
+
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
 
   useEffect(() => {
@@ -502,7 +547,15 @@ export default function App() {
   const fetchUserProfile = async (uid) => {
     try {
       const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) { setUserProfile(snap.data()); setProfileForm(snap.data()); }
+      if (snap.exists()) {
+        const data = snap.data();
+        if (!data.refCode) {
+          const refCode = generateRefCode(snap.data().displayName || uid);
+          await updateDoc(doc(db, "users", uid), { refCode });
+          data.refCode = refCode;
+        }
+        setUserProfile(data); setProfileForm(data);
+      }
     } catch(e) {}
   };
 
@@ -529,13 +582,9 @@ export default function App() {
   const reportReview = async (snus, review) => {
     try {
       const existing = await getDocs(query(collection(db, "reported_reviews"), where("snusId", "==", snus.id), where("reviewUser", "==", review.user), where("reviewDate", "==", review.date)));
-      if (!existing.empty) { alert("Du har allerede rapportert denne vurderingen!"); return; }
-      await addDoc(collection(db, "reported_reviews"), {
-        snusId: snus.id, snusName: snus.name,
-        reviewUser: review.user, reviewText: review.text || "", reviewRating: review.rating, reviewDate: review.date,
-        reportedBy: displayName, reportedAt: new Date().toISOString()
-      });
-      alert("Vurdering rapportert til admin! 🚩");
+      if (!existing.empty) { alert("Du har allerede rapportert denne!"); return; }
+      await addDoc(collection(db, "reported_reviews"), { snusId: snus.id, snusName: snus.name, reviewUser: review.user, reviewText: review.text || "", reviewRating: review.rating, reviewDate: review.date, reportedBy: displayName, reportedAt: new Date().toISOString() });
+      alert("Rapportert! 🚩");
     } catch(e) {}
   };
 
@@ -543,20 +592,12 @@ export default function App() {
     if (!window.confirm(`Slett vurdering fra @${review.user}?`)) return;
     const newReviews = snus.reviews.filter(r => !(r.user === review.user && r.date === review.date));
     const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
-    await updateDoc(doc(db, "snus", snus.id), {
-      reviews: newReviews,
-      totalRatings: newReviews.length,
-      totalScore,
-      avgRating: newReviews.length > 0 ? totalScore / newReviews.length : 0
-    });
+    await updateDoc(doc(db, "snus", snus.id), { reviews: newReviews, totalRatings: newReviews.length, totalScore, avgRating: newReviews.length > 0 ? totalScore / newReviews.length : 0 });
     setSelectedSnus(prev => prev ? { ...prev, reviews: newReviews } : null);
     fetchSnus();
   };
 
-  const dismissReport = async (reportId) => {
-    await deleteDoc(doc(db, "reported_reviews", reportId));
-    fetchReported();
-  };
+  const dismissReport = async (reportId) => { await deleteDoc(doc(db, "reported_reviews", reportId)); fetchReported(); };
 
   const deleteReportedReview = async (report) => {
     const snusDoc = snusList.find(s => s.id === report.snusId);
@@ -614,7 +655,16 @@ export default function App() {
         if (!acceptedPrivacy) { alert("Du må godta personvernerklæringen!"); return; }
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
-        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0 });
+        const refCode = generateRefCode(username.trim());
+        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0, refCode, inviteCount: 0, invitedBy: refCodeInput || null });
+        if (refCodeInput.trim()) {
+          const refSnap = await getDocs(query(collection(db, "users"), where("refCode", "==", refCodeInput.trim())));
+          if (!refSnap.empty) {
+            const inviterUid = refSnap.docs[0].id;
+            const inviterData = refSnap.docs[0].data();
+            await updateDoc(doc(db, "users", inviterUid), { inviteCount: (inviterData.inviteCount || 0) + 1 });
+          }
+        }
         setUser({ ...result.user, displayName: username.trim() });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -706,6 +756,13 @@ export default function App() {
     setUnknownBarcode(null); alert("Sendt til admin!");
   };
 
+  const copyRefCode = () => {
+    const link = `https://snusrate.vercel.app?ref=${myRefCode}`;
+    navigator.clipboard.writeText(link).then(() => alert("Invitasjonslenke kopiert! 🎉"));
+  };
+
+  const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
+
   const s = {
     app: { fontFamily: "'Georgia', serif", background: "#0a0a0a", minHeight: "100vh", color: "#e8e0d0", maxWidth: 430, margin: "0 auto" },
     header: { background: "#111", borderBottom: "1px solid #1e1e1e", padding: "14px 20px", position: "sticky", top: 0, zIndex: 10 },
@@ -732,6 +789,7 @@ export default function App() {
     statBox: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", textAlign: "center", flex: 1, cursor: "pointer" },
     buddyCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" },
     badge: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" },
+    filterBtn: (active) => ({ background: active ? "#1e1e1e" : "none", border: active ? "1px solid #e8b84b" : "1px solid #333", borderRadius: 20, padding: "5px 12px", color: active ? "#e8b84b" : "#555", cursor: "pointer", fontSize: 11, fontWeight: 700 }),
   };
 
   if (!user) return (
@@ -764,6 +822,8 @@ export default function App() {
             </select>
             <span style={s.label}>By</span>
             <input style={s.input} value={city} onChange={e => setCity(e.target.value)} placeholder="f.eks. Oslo" />
+            <span style={s.label}>Invitasjonskode (valgfritt)</span>
+            <input style={s.input} value={refCodeInput} onChange={e => setRefCodeInput(e.target.value)} placeholder="Skriv inn kode hvis du ble invitert" />
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16 }}>
               <input type="checkbox" checked={acceptedPrivacy} onChange={e => setAcceptedPrivacy(e.target.checked)} style={{ marginTop: 2, cursor: "pointer", width: 16, height: 16 }} />
               <span style={{ fontSize: 13, color: "#888" }}>Jeg godtar{" "}<span style={{ color: "#e8b84b", cursor: "pointer", textDecoration: "underline" }} onClick={() => setShowPrivacyInReg(true)}>personvernerklæringen</span></span>
@@ -803,6 +863,36 @@ export default function App() {
       {viewingUser && <UserProfileModal username={viewingUser} currentUser={user} currentDisplayName={displayName} snusList={snusList} onClose={() => setViewingUser(null)} onOpenSnus={openSnus} />}
       {showBuddyList && <BuddyListModal buddies={buddies} onSelectBuddy={name => { setShowBuddyList(false); setViewingUser(name); }} onClose={() => setShowBuddyList(false)} />}
 
+      {showInvite && (
+        <div style={s.modal} onClick={() => setShowInvite(false)}>
+          <div style={s.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>📣 Inviter venner</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 20 }}>Del lenken og få titler når folk registrerer seg!</div>
+            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "16px", marginBottom: 16, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 8, letterSpacing: 2, textTransform: "uppercase" }}>Din kode</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b", letterSpacing: 2 }}>{myRefCode}</div>
+              <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>Inviterte: {userProfile?.inviteCount || 0}</div>
+            </div>
+            {inviteTitle && <div style={{ textAlign: "center", marginBottom: 16 }}><span style={s.badge}>{inviteTitle}</span></div>}
+            <div style={{ marginBottom: 20 }}>
+              <div style={s.sectionTitle}>Neste tittel</div>
+              {INVITE_TITLES.map(t => {
+                const count = userProfile?.inviteCount || 0;
+                const done = count >= t.count;
+                return (
+                  <div key={t.count} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}>
+                    <span style={{ fontSize: 13, color: done ? "#e8b84b" : "#444" }}>{t.title}</span>
+                    <span style={{ fontSize: 11, color: done ? "#e8b84b" : "#333" }}>{done ? "✅" : `${count}/${t.count}`}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <button style={s.btn} onClick={copyRefCode}>📋 Kopier invitasjonslenke</button>
+            <button style={s.btnOutline} onClick={() => setShowInvite(false)}>Lukk</button>
+          </div>
+        </div>
+      )}
+
       <div style={s.header}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nordic Snus Community</div></div>
@@ -815,7 +905,7 @@ export default function App() {
       </div>
 
       <div style={s.nav}>
-        {[["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
+        {[["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["favoritter","Favoritter"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
           <button key={k} style={s.navBtn(tab===k)} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -824,11 +914,23 @@ export default function App() {
         {tab === "explore" && (
           <>
             <LiveTicker allReviews={allReviews} onClickReview={r => openSnus(snusList.find(sn => sn.id === r.snusId))} />
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input style={{ ...s.searchBox, marginBottom: 0, flex: 1 }} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
               <button onClick={() => setShowScanner(true)} style={{ background: "#141414", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 10, padding: "0 16px", cursor: "pointer", fontSize: 20 }}>📷</button>
             </div>
-            <div style={s.sectionTitle}>Alle snus ({filtered.length})</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+              <button style={s.filterBtn(!filterStrength)} onClick={() => setFilterStrength("")}>Alle styrker</button>
+              {["1","2","3","4","5"].map(v => (
+                <button key={v} style={s.filterBtn(filterStrength === v)} onClick={() => setFilterStrength(filterStrength === v ? "" : v)}>{"🔥".repeat(Number(v))}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+              <button style={s.filterBtn(!filterType)} onClick={() => setFilterType("")}>Alle typer</button>
+              {uniqueTypes.slice(0, 6).map(t => (
+                <button key={t} style={s.filterBtn(filterType === t)} onClick={() => setFilterType(filterType === t ? "" : t)}>{t}</button>
+              ))}
+            </div>
+            <div style={s.sectionTitle}>Snus ({filtered.length})</div>
             {filtered.map(sn => (
               <div key={sn.id} style={s.card} onClick={() => openSnus(sn)}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -893,6 +995,29 @@ export default function App() {
           </>
         )}
 
+        {tab === "favoritter" && (
+          <>
+            <div style={s.sectionTitle}>Mest brukt som favoritt</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Basert på antall vurderinger</div>
+            {topFavSnus.map((sn, i) => (
+              <div key={sn.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(sn)}>
+                <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, width: 30, textAlign: "center" }}>
+                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 3 }}>{sn.brand}</div>
+                  <FlameStrength value={sn.strength} />
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{sn.totalRatings || 0}</div>
+                  <div style={{ fontSize: 10, color: "#444" }}>vurderinger</div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
         {tab === "profil" && (
           <>
             <div style={{ textAlign: "center", padding: "32px 0 20px" }}>
@@ -909,6 +1034,7 @@ export default function App() {
                 <span style={s.badge}>{ratingTitle}</span>
                 {productTitle && <span style={s.badge}>{productTitle}</span>}
                 {streakTitle && <span style={s.badge}>{streakTitle}</span>}
+                {inviteTitle && <span style={s.badge}>{inviteTitle}</span>}
               </div>
             </div>
 
@@ -926,6 +1052,10 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 16 }} onClick={() => setShowInvite(true)}>
+              📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte
+            </button>
 
             {favSnusObj && (
               <div style={{ marginBottom: 20 }}>
@@ -1125,9 +1255,7 @@ export default function App() {
                           <button onClick={() => !isMyReview && likeReview(selectedSnus, r)} style={{ background: hasLiked ? "#1e1e1e" : "none", border: hasLiked ? "1px solid #e8b84b" : "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: isMyReview ? "default" : "pointer", color: hasLiked ? "#e8b84b" : "#555", fontSize: 12 }}>
                             👍 {likes.length > 0 ? likes.length : ""}
                           </button>
-                          {!isMyReview && (
-                            <button onClick={() => reportReview(selectedSnus, r)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#555", fontSize: 12 }}>🚩</button>
-                          )}
+                          {!isMyReview && <button onClick={() => reportReview(selectedSnus, r)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#555", fontSize: 12 }}>🚩</button>}
                         </div>
                         <div style={{ display: "flex", gap: 8 }}>
                           {isMyReview && <button onClick={() => startEditReview(selectedSnus)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#666", fontSize: 12 }}>✏️ Rediger</button>}
