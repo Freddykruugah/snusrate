@@ -198,6 +198,15 @@ const daysSince = (iso) => {
   return Math.floor(diff);
 };
 
+const similarName = (a, b) => {
+  const normalize = s => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na === nb) return true;
+  if (na.replace(/\s/g, "") === nb.replace(/\s/g, "")) return true;
+  return false;
+};
+
 function FlameStrength({ value }) {
   const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
   const count = levels[value] || 3;
@@ -470,11 +479,12 @@ function CompareModal({ myDisplayName, myReviews, theirProfile, theirReviews, sn
     return { snus, myRating: myR?.rating, theirRating: theirR?.rating, agree };
   }).filter(x => x.snus);
 
+  const sectionTitle = { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 };
+
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 200, display: "flex", alignItems: "flex-end" },
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "92vh", overflowY: "auto" },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 16 },
-    sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
     statRow: { display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #1a1a1a" },
   };
 
@@ -514,16 +524,14 @@ function CompareModal({ myDisplayName, myReviews, theirProfile, theirReviews, sn
             <div style={{ fontSize: 10, color: "#555" }}>Dem</div>
           </div>
         </div>
-
-        <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 }}>📊 Statistikk</div>
+        <div style={sectionTitle}>📊 Statistikk</div>
         <StatRow label="Vurderinger" myVal={myReviews.length} theirVal={theirReviews.length} />
         <StatRow label="Snitt" myVal={myAvg} theirVal={theirAvg} />
         <StatRow label="Streak" myVal={`${myStreak}🔥`} theirVal={`${theirStreak}🔥`} />
         <StatRow label="Likes" myVal={myLikes} theirVal={theirLikes} />
-
         {commonSnus.length > 0 && (
           <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 4, fontWeight: 700 }}>🤝 Felles snus ({commonSnus.length})</div>
+            <div style={{ ...sectionTitle, marginBottom: 4 }}>🤝 Felles snus ({commonSnus.length})</div>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 12 }}>Snus dere begge har ratet</div>
             {commonSnus.map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1a1a1a" }}>
@@ -532,25 +540,17 @@ function CompareModal({ myDisplayName, myReviews, theirProfile, theirReviews, sn
                   <div style={{ fontSize: 11, color: "#555" }}>{item.agree ? "✅ Enige" : "❌ Uenige"}</div>
                 </div>
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{"★".repeat(item.myRating)}</div>
-                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{"★".repeat(item.myRating)}</div>
                   <div style={{ fontSize: 11, color: "#333" }}>vs</div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{"★".repeat(item.theirRating)}</div>
-                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{"★".repeat(item.theirRating)}</div>
                 </div>
               </div>
             ))}
           </div>
         )}
-
         {commonSnus.length === 0 && (
-          <div style={{ textAlign: "center", padding: "20px 0", color: "#555", fontSize: 13 }}>
-            Ingen felles snus ratet ennå
-          </div>
+          <div style={{ textAlign: "center", padding: "20px 0", color: "#555", fontSize: 13 }}>Ingen felles snus ratet ennå</div>
         )}
-
         <button style={st.btnOutline} onClick={onClose}>Lukk</button>
       </div>
     </div>
@@ -614,14 +614,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, currentUs
   return (
     <>
       {showCompare && profile && (
-        <CompareModal
-          myDisplayName={currentDisplayName}
-          myReviews={currentUserReviews}
-          theirProfile={profile}
-          theirReviews={userReviews}
-          snusList={snusList}
-          onClose={() => setShowCompare(false)}
-        />
+        <CompareModal myDisplayName={currentDisplayName} myReviews={currentUserReviews} theirProfile={profile} theirReviews={userReviews} snusList={snusList} onClose={() => setShowCompare(false)} />
       )}
       <div style={st.modal} onClick={onClose}>
         <div style={st.box} onClick={e => e.stopPropagation()}>
@@ -759,6 +752,8 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const [rankingCategory, setRankingCategory] = useState("vurderinger");
+  const [mergingWith, setMergingWith] = useState(null);
+  const [duplicates, setDuplicates] = useState([]);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -819,6 +814,28 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const myRank = rankedList.findIndex(u => u.displayName === displayName) + 1;
   const myRankData = rankedList.find(u => u.displayName === displayName);
 
+  // Finn duplikater
+  const findDuplicates = () => {
+    const groups = [];
+    const used = new Set();
+    for (let i = 0; i < snusList.length; i++) {
+      if (used.has(snusList[i].id)) continue;
+      const group = [snusList[i]];
+      for (let j = i + 1; j < snusList.length; j++) {
+        if (used.has(snusList[j].id)) continue;
+        if (similarName(snusList[i].name, snusList[j].name)) {
+          group.push(snusList[j]);
+          used.add(snusList[j].id);
+        }
+      }
+      if (group.length > 1) {
+        used.add(snusList[i].id);
+        groups.push(group);
+      }
+    }
+    setDuplicates(groups);
+  };
+
   useEffect(() => {
     onAuthStateChanged(auth, async u => {
       setUser(u);
@@ -834,6 +851,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
   useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); } }, [isAdmin]);
   useEffect(() => { if (user) fetchUsers(); }, [user]);
+  useEffect(() => { if (snusList.length > 0) findDuplicates(); }, [snusList]);
 
   const fetchSnus = async () => {
     try {
@@ -909,6 +927,48 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       const all = [...snap1.docs.map(d => d.data()), ...snap2.docs.map(d => d.data())];
       setBuddies(all.map(b => b.fromUid === uid ? { name: b.toName, uid: b.toUid, avatar: b.toAvatar } : { name: b.fromName, uid: b.fromUid, avatar: b.fromAvatar }));
     } catch(e) {}
+  };
+
+  // Slå sammen to produkter – behold keepSnus, slett deleteSnus
+  const mergeProducts = async (keepSnus, deleteSnus) => {
+    if (!window.confirm(`Slå sammen "${deleteSnus.name}" inn i "${keepSnus.name}"? Dette kan ikke angres!`)) return;
+    try {
+      // Flytt vurderinger fra deleteSnus til keepSnus (unngå duplikater per bruker)
+      const existingUsers = new Set((keepSnus.reviews || []).map(r => r.user));
+      const newReviews = [...(keepSnus.reviews || [])];
+      for (const r of (deleteSnus.reviews || [])) {
+        if (!existingUsers.has(r.user)) {
+          newReviews.push(r);
+          existingUsers.add(r.user);
+        }
+      }
+      const totalScore = newReviews.reduce((sum, r) => sum + r.rating, 0);
+      const avgRating = newReviews.length > 0 ? totalScore / newReviews.length : 0;
+      const newFavCount = (keepSnus.favCount || 0) + (deleteSnus.favCount || 0);
+      const newBarcode = keepSnus.barcode || deleteSnus.barcode || "";
+
+      await updateDoc(doc(db, "snus", keepSnus.id), {
+        reviews: newReviews,
+        totalRatings: newReviews.length,
+        totalScore,
+        avgRating,
+        favCount: newFavCount,
+        barcode: newBarcode,
+      });
+
+      // Oppdater brukere som hadde deleteSnus som favoritt
+      const usersWithFav = await getDocs(query(collection(db, "users"), where("favoriteSnus", "==", deleteSnus.id)));
+      for (const u of usersWithFav.docs) {
+        await updateDoc(doc(db, "users", u.id), { favoriteSnus: keepSnus.id });
+      }
+
+      await deleteDoc(doc(db, "snus", deleteSnus.id));
+      setMergingWith(null);
+      fetchSnus();
+      alert(`✅ Slått sammen! "${deleteSnus.name}" er nå del av "${keepSnus.name}"`);
+    } catch(e) {
+      alert("Noe gikk galt: " + e.message);
+    }
   };
 
   const reportReview = async (snus, review) => {
@@ -1059,12 +1119,18 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
   const submitNewSnus = async () => {
     if (!newSnus.name || !newSnus.brand) return;
+    // Sjekk duplikat
+    const dup = snusList.find(s => similarName(s.name, newSnus.name));
+    if (dup) { alert(`"${dup.name}" finnes allerede! Sjekk om det er samme produkt.`); return; }
     await addDoc(collection(db, "snus_pending"), { ...newSnus, submittedBy: displayName, submittedByUid: user.uid, approved: false, createdAt: new Date().toISOString() });
     setAddSubmitted(true);
   };
 
   const adminAddSnus = async () => {
     if (!adminNewSnus.name || !adminNewSnus.brand) return;
+    // Sjekk duplikat
+    const dup = snusList.find(s => similarName(s.name, adminNewSnus.name));
+    if (dup && !window.confirm(`"${dup.name}" finnes allerede. Vil du legge til likevel?`)) return;
     await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
     setAdminNewSnus({ name: "", brand: "", type: "", strength: "3", description: "" });
     fetchSnus(); alert("Snus lagt til!");
@@ -1077,6 +1143,8 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   };
 
   const approvePending = async (item) => {
+    const dup = snusList.find(s => similarName(s.name, item.name));
+    if (dup && !window.confirm(`"${dup.name}" finnes allerede. Vil du godkjenne likevel?`)) return;
     await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", description: item.description || "", avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
     if (item.submittedByUid) {
@@ -1213,17 +1281,33 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} onInstall={() => { setShowMenu(false); setShowInstall(true); }} />}
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       {viewingUser && (
-        <UserProfileModal
-          username={viewingUser}
-          currentUser={user}
-          currentDisplayName={displayName}
-          currentUserReviews={myReviews}
-          snusList={snusList}
-          onClose={() => setViewingUser(null)}
-          onOpenSnus={openSnus}
-        />
+        <UserProfileModal username={viewingUser} currentUser={user} currentDisplayName={displayName} currentUserReviews={myReviews} snusList={snusList} onClose={() => setViewingUser(null)} onOpenSnus={openSnus} />
       )}
       {showBuddyList && <BuddyListModal buddies={buddies} onSelectBuddy={name => { setShowBuddyList(false); setViewingUser(name); }} onClose={() => setShowBuddyList(false)} />}
+
+      {mergingWith && (
+        <div style={s.modal} onClick={() => setMergingWith(null)}>
+          <div style={s.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4, color: "#e8b84b" }}>🔀 Slå sammen duplikat</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Velg hvilken som er den RIKTIGE – den andre slettes og vurderinger flyttes over.</div>
+            <div style={{ fontSize: 11, color: "#cb7e7e", marginBottom: 16 }}>⚠️ Dette kan ikke angres!</div>
+            {mergingWith.map((sn, i) => (
+              <div key={sn.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "14px", marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div>
+                <div style={{ fontSize: 12, color: "#555", marginBottom: 8 }}>{sn.brand} · {sn.type} · {sn.totalRatings || 0} vurderinger</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {mergingWith.filter(x => x.id !== sn.id).map(other => (
+                    <button key={other.id} style={s.btnGreen} onClick={() => mergeProducts(sn, other)}>
+                      ✓ Behold denne, slett "{other.name.slice(0, 20)}"
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button style={s.btnOutline} onClick={() => setMergingWith(null)}>Avbryt</button>
+          </div>
+        </div>
+      )}
 
       {showInvite && (
         <div style={s.modal} onClick={() => setShowInvite(false)}>
@@ -1287,7 +1371,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>Du var her <span style={{ color: "#e8b84b" }}>tidligere i dag</span></div>
               )}
             </div>
-
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
               <span style={s.badge}>{ratingTitle}</span>
               {productTitle && <span style={s.badge}>{productTitle}</span>}
@@ -1295,7 +1378,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               {loginStreakTitle && <span style={s.badge}>{loginStreakTitle}</span>}
               {inviteTitle && <span style={s.badge}>{inviteTitle}</span>}
             </div>
-
             {(userProfile?.loginStreak || 0) > 0 && (
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 16px", marginBottom: 16, textAlign: "center" }}>
                 <div style={{ fontSize: 22 }}>📅</div>
@@ -1303,33 +1385,19 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>Pålogging streak</div>
               </div>
             )}
-
             <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-              {[
-                [snusList.length, "Produkter", null],
-                [allReviews.length, "Vurderinger", null],
-                [buddies.length, "Buddies", () => setShowBuddyList(true)],
-              ].map(([val, label, onClick], i) => (
+              {[[snusList.length, "Produkter", null],[allReviews.length, "Vurderinger", null],[buddies.length, "Buddies", () => setShowBuddyList(true)]].map(([val, label, onClick], i) => (
                 <div key={i} style={{ ...s.statBox, cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
                   <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
                   <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
                 </div>
               ))}
             </div>
-
-            <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px" }} onClick={() => setShowScanner(true)}>
-              📷 Skann snus
-            </button>
-            <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 20 }} onClick={() => setTab("explore")}>
-              🔍 Utforsk alle snus
-            </button>
-
+            <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px" }} onClick={() => setShowScanner(true)}>📷 Skann snus</button>
+            <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 20 }} onClick={() => setTab("explore")}>🔍 Utforsk alle snus</button>
             <div style={{ ...s.sectionTitle, marginBottom: 10 }}>Siste aktivitet</div>
             <LiveTicker allReviews={allReviews} onClickReview={r => openSnus(snusList.find(sn => sn.id === r.snusId))} />
-
-            <button style={{ ...s.btnOutline, marginTop: 8 }} onClick={() => setShowInvite(true)}>
-              📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte
-            </button>
+            <button style={{ ...s.btnOutline, marginTop: 8 }} onClick={() => setShowInvite(true)}>📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte</button>
           </>
         )}
 
@@ -1462,9 +1530,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 8px", background: "rgba(232,184,75,0.05)", borderRadius: 8 }}>
                   <div style={{ fontSize: 15, fontWeight: 900, width: 32, textAlign: "center", color: "#555" }}>{myRank}</div>
                   <div style={{ fontSize: 28 }}>{myAvatar}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{displayName}</div>
-                  </div>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{displayName}</div></div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 15, fontWeight: 900, color: "#e8b84b" }}>{getRankingValue(myRankData).split(" ")[0]}</div>
                     <div style={{ fontSize: 10, color: "#444" }}>{getRankingValue(myRankData).split(" ").slice(1).join(" ")}</div>
@@ -1495,26 +1561,15 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 {inviteTitle && <span style={s.badge}>{inviteTitle}</span>}
               </div>
             </div>
-
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              {[
-                [myReviews.length, "Vurderinger", null],
-                [myAvgRating, "Snitt", null],
-                [myLikesReceived, "Likes", null],
-                [`${myStreak}🔥`, "Streak", null],
-                [buddies.length, "Buddies", () => setShowBuddyList(true)]
-              ].map(([val, label, onClick], i) => (
+              {[[myReviews.length,"Vurderinger",null],[myAvgRating,"Snitt",null],[myLikesReceived,"Likes",null],[`${myStreak}🔥`,"Streak",null],[buddies.length,"Buddies",() => setShowBuddyList(true)]].map(([val, label, onClick], i) => (
                 <div key={i} style={{ ...s.statBox, padding: "10px 6px" }} onClick={onClick}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
                   <div style={{ fontSize: 8, color: "#555", marginTop: 3, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
                 </div>
               ))}
             </div>
-
-            <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 16 }} onClick={() => setShowInvite(true)}>
-              📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte
-            </button>
-
+            <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 16 }} onClick={() => setShowInvite(true)}>📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte</button>
             {favSnusObj && (
               <div style={{ marginBottom: 20 }}>
                 <div style={s.sectionTitle}>Favorittsnuus</div>
@@ -1525,7 +1580,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </div>
               </div>
             )}
-
             {buddyRequests.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <div style={s.sectionTitle}>🤠 Snusbuddy-forespørsler ({buddyRequests.length})</div>
@@ -1543,7 +1597,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 ))}
               </div>
             )}
-
             <div style={{ marginBottom: 20 }}>
               <div style={s.sectionTitle}>Finn Snusbuddies</div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -1563,7 +1616,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </div>
               ))}
             </div>
-
             {!editingProfile ? (
               <button style={s.btnOutline} onClick={() => setEditingProfile(true)}>Rediger profil</button>
             ) : (
@@ -1586,7 +1638,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <button style={s.btnOutline} onClick={() => setEditingProfile(false)}>Avbryt</button>
               </div>
             )}
-
             <div style={{ marginTop: 8 }}>
               <div style={s.sectionTitle}>Mine vurderinger</div>
               {myReviews.length === 0 && <div style={{ color: "#444", fontSize: 13, textAlign: "center" }}>Du har ikke ratet noen snus ennå</div>}
@@ -1603,6 +1654,22 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
         {tab === "admin" && isAdmin && (
           <>
+            {/* DUPLIKATER */}
+            {duplicates.length > 0 && (
+              <div style={{ background: "#1a1000", border: "1px solid #5a4000", borderRadius: 10, padding: 16, marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", marginBottom: 12 }}>⚠️ Mulige duplikater ({duplicates.length} grupper)</div>
+                {duplicates.map((group, i) => (
+                  <div key={i} style={{ background: "#111", borderRadius: 8, padding: "12px", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
+                      {group.map(s => s.name).join(" / ")}
+                    </div>
+                    <button style={s.btnSmall} onClick={() => setMergingWith(group)}>🔀 Slå sammen</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* BRUKER OVERSIKT */}
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <div style={s.sectionTitle}>👥 Brukere ({userList.length})</div>
