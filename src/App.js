@@ -122,6 +122,12 @@ const generateRefCode = (displayName) => {
   return displayName.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.random().toString(36).slice(2, 6);
 };
 
+const daysSince = (iso) => {
+  if (!iso) return null;
+  const diff = (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
+  return Math.floor(diff);
+};
+
 function FlameStrength({ value }) {
   const levels = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "Normal": 3, "Sterk": 4, "Extrem": 5 };
   const count = levels[value] || 3;
@@ -160,52 +166,7 @@ function AvatarPicker({ selected, onSelect }) {
   );
 }
 
-function InstallBanner({ onDismiss }) {
-  const [isIOS, setIsIOS] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-
-  useEffect(() => {
-    const ua = navigator.userAgent;
-    setIsIOS(/iPhone|iPad|iPod/.test(ua));
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
-  }, []);
-
-  const installAndroid = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      onDismiss();
-    }
-  };
-
-  return (
-    <div style={{ background: "#141414", border: "1px solid #e8b84b", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b", marginBottom: 8 }}>📱 Legg til på hjemskjerm</div>
-        <button onClick={onDismiss} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18 }}>✕</button>
-      </div>
-      {isIOS && (
-        <div style={{ fontSize: 12, color: "#888", lineHeight: 1.8 }}>
-          1. Trykk på <span style={{ color: "#e8b84b" }}>dele-ikonet</span> nederst i Safari<br/>
-          2. Scroll ned og trykk <span style={{ color: "#e8b84b" }}>"Legg til på hjemskjerm"</span><br/>
-          3. Trykk <span style={{ color: "#e8b84b" }}>"Legg til"</span> øverst til høyre
-        </div>
-      )}
-      {!isIOS && deferredPrompt && (
-        <button onClick={installAndroid} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 4 }}>
-          Installer SnusRate
-        </button>
-      )}
-      {!isIOS && !deferredPrompt && (
-        <div style={{ fontSize: 12, color: "#888" }}>Åpne i Safari (iPhone) eller Chrome (Android) for å installere.</div>
-      )}
-    </div>
-  );
-}
-function HamburgerMenu({ onClose }) {
+function HamburgerMenu({ onClose, onInstall }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const st = {
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200 },
@@ -232,6 +193,8 @@ function HamburgerMenu({ onClose }) {
         <div style={st.item} onClick={() => setShowPrivacy(true)}><span>📋</span> Personvernerklæring</div>
         <div style={st.item}><span>📜</span> Vilkår for bruk</div>
         <div style={st.item}><span>ℹ️</span> Om SnusRate</div>
+        <span style={st.title}>App</span>
+        <div style={st.item} onClick={onInstall}><span>📱</span> Legg til på hjemskjerm</div>
         <span style={st.title}>Hjelp</span>
         <div style={st.item}><span>❓</span> FAQ</div>
         <div style={st.item}><span>📧</span> Kontakt oss</div>
@@ -240,6 +203,64 @@ function HamburgerMenu({ onClose }) {
         <div style={{ marginTop: 40, fontSize: 11, color: "#333", textAlign: "center" }}>SnusRate v1.0 · © 2026 SnusRate</div>
       </div>
     </>
+  );
+}
+
+function InstallModal({ onClose }) {
+  const [isIOS, setIsIOS] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    setIsIOS(/iPhone|iPad|iPod/.test(navigator.userAgent));
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const installAndroid = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      onClose();
+    }
+  };
+
+  const st = {
+    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
+    box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px" },
+    btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
+    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+  };
+
+  return (
+    <div style={st.modal} onClick={onClose}>
+      <div style={st.box} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>📱 Legg til på hjemskjerm</div>
+        <div style={{ fontSize: 12, color: "#555", marginBottom: 20 }}>Installer SnusRate som en app!</div>
+        {isIOS ? (
+          <div style={{ background: "#111", borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 13, color: "#aaa", lineHeight: 2 }}>
+              <div>1. Åpne SnusRate i <span style={{ color: "#e8b84b" }}>Safari</span></div>
+              <div>2. Trykk på <span style={{ color: "#e8b84b" }}>dele-ikonet</span> 􀈂 nederst</div>
+              <div>3. Velg <span style={{ color: "#e8b84b" }}>"Legg til på hjemskjerm"</span></div>
+              <div>4. Trykk <span style={{ color: "#e8b84b" }}>"Legg til"</span> øverst til høyre</div>
+            </div>
+          </div>
+        ) : deferredPrompt ? (
+          <button style={st.btn} onClick={installAndroid}>⬇️ Installer SnusRate</button>
+        ) : (
+          <div style={{ background: "#111", borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 13, color: "#aaa", lineHeight: 2 }}>
+              <div>1. Åpne SnusRate i <span style={{ color: "#e8b84b" }}>Chrome</span> på Android</div>
+              <div>2. Trykk på <span style={{ color: "#e8b84b" }}>meny-ikonet</span> ⋮ øverst til høyre</div>
+              <div>3. Velg <span style={{ color: "#e8b84b" }}>"Legg til på startskjerm"</span></div>
+            </div>
+          </div>
+        )}
+        <button style={st.btnOutline} onClick={onClose}>Lukk</button>
+      </div>
+    </div>
   );
 }
 
@@ -479,11 +500,9 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       </div>
     </div>
   );
-}
-
-export default function App() {
+}export default function App() {
   const [user, setUser] = useState(null);
-  const [tab, setTab] = useState("explore");
+  const [tab, setTab] = useState("hjem");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -529,6 +548,7 @@ export default function App() {
   const [showBuddyList, setShowBuddyList] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -545,6 +565,7 @@ export default function App() {
   const inviteTitle = getInviteTitle(userProfile?.inviteCount || 0);
   const myRefCode = userProfile?.refCode || "";
   const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
+  const daysSinceLogin = daysSince(userProfile?.lastLogin);
 
   const filtered = snusList.filter(s => {
     const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase());
@@ -555,7 +576,6 @@ export default function App() {
 
   const topFavSnus = [...snusList].sort((a, b) => (b.favCount || 0) - (a.favCount || 0)).slice(0, 10);
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
-
   const filteredUsers = userList.filter(u =>
     u.displayName?.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.city?.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -563,9 +583,17 @@ export default function App() {
   );
 
   useEffect(() => {
-    onAuthStateChanged(auth, u => {
+    onAuthStateChanged(auth, async u => {
       setUser(u);
-      if (u) { fetchUserProfile(u.uid); fetchBuddyRequests(u.uid); fetchBuddies(u.uid); }
+      if (u) {
+        fetchUserProfile(u.uid);
+        fetchBuddyRequests(u.uid);
+        fetchBuddies(u.uid);
+        // Oppdater lastLogin
+        try {
+          await updateDoc(doc(db, "users", u.uid), { lastLogin: new Date().toISOString() });
+        } catch(e) {}
+      }
     });
     fetchSnus();
   }, []);
@@ -723,7 +751,7 @@ export default function App() {
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
         const refCode = generateRefCode(username.trim());
-        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0, refCode, inviteCount: 0, invitedBy: refCodeInput || null });
+        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0, refCode, inviteCount: 0, invitedBy: refCodeInput || null, lastLogin: new Date().toISOString() });
         if (refCodeInput.trim()) {
           const refSnap = await getDocs(query(collection(db, "users"), where("refCode", "==", refCodeInput.trim())));
           if (!refSnap.empty) {
@@ -865,7 +893,7 @@ export default function App() {
           <button onClick={() => setShowMenu(true)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer" }}>☰</button>
         </div>
       </div>
-      {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} />}
+      {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} onInstall={() => { setShowMenu(false); setShowInstall(true); }} />}
       <div style={s.content}>
         <div style={{ textAlign: "center", padding: "48px 0 24px", fontSize: 48 }}>🤠</div>
         <div style={{ ...s.sectionTitle, textAlign: "center", marginBottom: 20 }}>{authMode === "login" ? "Logg inn" : "Opprett konto"}</div>
@@ -912,6 +940,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
     </div>
   );
 
@@ -924,7 +953,8 @@ export default function App() {
           <div style={{ textAlign: "center" }}><div style={{ fontSize: 56 }}>✅</div><div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 12 }}>Strekkode koblet!</div></div>
         </div>
       )}
-      {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} />}
+      {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} onInstall={() => { setShowMenu(false); setShowInstall(true); }} />}
+      {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       {viewingUser && <UserProfileModal username={viewingUser} currentUser={user} currentDisplayName={displayName} snusList={snusList} onClose={() => setViewingUser(null)} onOpenSnus={openSnus} />}
       {showBuddyList && <BuddyListModal buddies={buddies} onSelectBuddy={name => { setShowBuddyList(false); setViewingUser(name); }} onClose={() => setShowBuddyList(false)} />}
 
@@ -970,21 +1000,63 @@ export default function App() {
       </div>
 
       <div style={s.nav}>
-        {[["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["favoritter","Favoritter"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
+        {[["hjem","Hjem"],["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["favoritter","Favoritter"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
           <button key={k} style={s.navBtn(tab===k)} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
 
       <div style={s.content}>
+
+        {/* HJEM */}
+        {tab === "hjem" && (
+          <>
+            <div style={{ textAlign: "center", padding: "32px 0 24px" }}>
+              <div style={{ fontSize: 56, marginBottom: 8 }}>{myAvatar}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#e8b84b" }}>Velkommen tilbake</div>
+              <div style={{ fontSize: 15, color: "#e8e0d0", marginTop: 4 }}>@{displayName}</div>
+              {daysSinceLogin !== null && daysSinceLogin > 0 && (
+                <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>
+                  Du var her for <span style={{ color: "#e8b84b" }}>{daysSinceLogin} dag{daysSinceLogin !== 1 ? "er" : ""}</span> siden
+                </div>
+              )}
+              {daysSinceLogin === 0 && (
+                <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>Du var her <span style={{ color: "#e8b84b" }}>tidligere i dag</span></div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              {[
+                [snusList.length, "Produkter"],
+                [allReviews.length, "Vurderinger"],
+                [userList.length || "–", "Brukere"],
+              ].map(([val, label], i) => (
+                <div key={i} style={{ ...s.statBox, cursor: "default" }}>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
+                  <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px", background: "#e8b84b" }} onClick={() => setShowScanner(true)}>
+              📷 Skann snus
+            </button>
+
+            <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 20 }} onClick={() => setTab("explore")}>
+              🔍 Utforsk alle snus
+            </button>
+
+            <div style={{ ...s.sectionTitle, marginBottom: 10 }}>Siste aktivitet</div>
+            <LiveTicker allReviews={allReviews} onClickReview={r => openSnus(snusList.find(sn => sn.id === r.snusId))} />
+
+            <button style={{ ...s.btnOutline, marginTop: 8 }} onClick={() => setShowInvite(true)}>
+              📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte
+            </button>
+          </>
+        )}
+
+        {/* UTFORSK */}
         {tab === "explore" && (
           <>
-          {!localStorage.getItem("snusrate_install_dismissed") && (
-  <InstallBanner onDismiss={() => {
-    localStorage.setItem("snusrate_install_dismissed", "1");
-    window.location.reload();
-  }} />
-)}
-            <LiveTicker allReviews={allReviews} onClickReview={r => openSnus(snusList.find(sn => sn.id === r.snusId))} />
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input style={{ ...s.searchBox, marginBottom: 0, flex: 1 }} placeholder="🔍  Søk snus eller merke..." value={search} onChange={e => setSearch(e.target.value)} />
               <button onClick={() => setShowScanner(true)} style={{ background: "#141414", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 10, padding: "0 16px", cursor: "pointer", fontSize: 20 }}>📷</button>
@@ -1215,7 +1287,6 @@ export default function App() {
 
         {tab === "admin" && isAdmin && (
           <>
-            {/* BRUKER OVERSIKT */}
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <div style={s.sectionTitle}>👥 Brukere ({userList.length})</div>
