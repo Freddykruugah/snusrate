@@ -193,10 +193,10 @@ const plural = (n, sing, plur) => `${n} ${n === 1 ? sing : plur}`;
 const nicotineLabel = (mg) => {
   const n = parseFloat(mg);
   if (isNaN(n) || n <= 0) return null;
-  if (n < 6) return "Svak";
-  if (n < 9) return "Normal";
-  if (n < 14) return "Sterk";
-  if (n < 20) return "Ekstra sterk";
+  if (n < 7) return "Svak";
+  if (n < 11) return "Normal";
+  if (n < 16) return "Sterk";
+  if (n < 21) return "Ekstra sterk";
   return "Supersterk";
 };
 
