@@ -1320,7 +1320,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                     <div style={{ fontSize: 15, fontWeight: 900, color: "#e8b84b" }}>{getRankingValue(u).split(" ")[0]}</div>
                     <div style={{ fontSize: 10, color: "#444" }}>{getRankingValue(u).split(" ").slice(1).join(" ")}</div>
                   </div>
-                </div>                </div>
+                </div>
               );
             })}
 
