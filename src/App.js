@@ -595,7 +595,6 @@ function UserProfileModal({ username, currentUser, currentDisplayName, currentUs
 
   const favSnusObj = snusList.find(s => s.id === profile?.favoriteSnus);
   const streak = calculateStreak(userReviews);
-  const likesReceived = countLikesReceived(userReviews);
   const inviteTitle = getInviteTitle(profile?.inviteCount || 0);
   const loginStreakTitle = getLoginStreakTitle(profile?.loginStreak || 0);
 
