@@ -192,6 +192,10 @@ const plural = (n, sing, plur) => `${n} ${n === 1 ? sing : plur}`;
 
 const SNUS_TYPES = ["Brun Portion", "Brun Løs", "White Portion", "White Dry", "Helhvit Portion", "Helhvit Slim", "Helhvit Mini", "Helhvit Mini Portion", "Annet"];
 
+const SNUS_BRANDS = ["Swedish Match", "BAT", "Fiedler & Lundgren", "Skruf AB", "GN Tobacco", "AG Snus", "Nordic Spirit", "Loop", "Knox", "General", "Ettan", "Göteborgs Rapé", "Catch", "Kaliber", "Lyft", "Velo", "Zyn", "On!"];
+
+const SNUS_FLAVORS = ["Mint", "Eukalyptus", "Kaffe", "Lakris", "Bær", "Citrus", "Tobakk", "Ingefær", "Frukt", "Krydder", "Vanilje", "Pepper", "Melon", "Bringebær", "Tropisk"];
+
 const generateRefCode = (displayName) => {
   return displayName.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.random().toString(36).slice(2, 6);
 };
@@ -217,6 +221,15 @@ function FlameStrength({ value }) {
   return <span style={{ fontSize: 12 }}>{[1,2,3,4,5].map(i => <span key={i} style={{ opacity: i <= count ? 1 : 0.15 }}>🔥</span>)}</span>;
 }
 
+function StrengthLine({ snus }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <FlameStrength value={snus.strength} />
+      {snus.nicotine && <span style={{ fontSize: 11, color: "#888" }}>{snus.nicotine} mg/g</span>}
+    </span>
+  );
+}
+
 function StarRating({ value, onChange, size = 20 }) {
   const [hover, setHover] = useState(0);
   return (
@@ -235,6 +248,27 @@ function StrengthSelector({ value, onChange }) {
       {[1,2,3,4,5].map(i => (
         <button key={i} onClick={() => onChange(String(i))} style={{ background: value === String(i) ? "#1e1e1e" : "none", border: value === String(i) ? "1px solid #e8b84b" : "1px solid #2a2a2a", borderRadius: 6, padding: "7px 10px", cursor: "pointer", fontSize: 13 }}>{"🔥".repeat(i)}</button>
       ))}
+    </div>
+  );
+}
+
+function FlavorPicker({ value, onChange }) {
+  const selected = value || [];
+  const toggle = (f) => onChange(selected.includes(f) ? selected.filter(x => x !== f) : [...selected, f]);
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+      {SNUS_FLAVORS.map(f => (
+        <button key={f} onClick={() => toggle(f)} style={{ background: selected.includes(f) ? "#1e1e1e" : "none", border: selected.includes(f) ? "1px solid #e8b84b" : "1px solid #2a2a2a", borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 11, color: selected.includes(f) ? "#e8b84b" : "#777" }}>{f}</button>
+      ))}
+    </div>
+  );
+}
+
+function FlavorTags({ flavors }) {
+  if (!flavors || flavors.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
+      {flavors.map(f => <span key={f} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 12, padding: "2px 9px", fontSize: 10, color: "#9a8c66" }}>{f}</span>)}
     </div>
   );
 }
@@ -410,7 +444,7 @@ function BarcodeScanner({ onResult, onClose }) {
 
 function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose }) {
   const [search, setSearch] = useState("");
-  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3" });
+  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", nicotine: "", flavors: [] });
   const [mode, setMode] = useState("match");
   const filtered = snusList.filter(s => s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase()));
   const st = {
@@ -448,7 +482,7 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
             <span style={st.label}>Produktnavn</span>
             <input style={st.input} placeholder="f.eks. General White" value={newSnus.name} onChange={e => setNewSnus({...newSnus, name: e.target.value})} />
             <span style={st.label}>Merke</span>
-            <input style={st.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
+            <input style={st.input} list="snus-brands" placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
             <span style={st.label}>Type</span>
             <select style={st.input} value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})}>
               <option value="">Velg type</option>
@@ -735,14 +769,15 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const [reviewText, setReviewText] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [editingReview, setEditingReview] = useState(false);
-  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "" });
+  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "", nicotine: "", flavors: [] });
   const [addSubmitted, setAddSubmitted] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "" });
+  const [adminNewSnus, setAdminNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "", nicotine: "", flavors: [] });
   const [editingSnus, setEditingSnus] = useState(null);
   const [search, setSearch] = useState("");
   const [filterStrength, setFilterStrength] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [filterFlavor, setFilterFlavor] = useState("");
   const [showScanner, setShowScanner] = useState(false);
   const [unknownBarcode, setUnknownBarcode] = useState(null);
   const [barcodeMatched, setBarcodeMatched] = useState(false);
@@ -783,6 +818,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     if (t && !acc[t.toLowerCase()]) acc[t.toLowerCase()] = t;
     return acc;
   }, {})).sort();
+  const uniqueFlavors = [...new Set(snusList.flatMap(s => s.flavors || []))].sort();
   const daysSinceLogin = daysSince(userProfile?.lastLogin);
   const topFavSnus = [...snusList].sort((a, b) => (b.favCount || 0) - (a.favCount || 0)).slice(0, 10);
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
@@ -796,7 +832,8 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase());
     const matchStrength = !filterStrength || s.strength === filterStrength;
     const matchType = !filterType || s.type?.toLowerCase().includes(filterType.toLowerCase());
-    return matchSearch && matchStrength && matchType;
+    const matchFlavor = !filterFlavor || (s.flavors || []).includes(filterFlavor);
+    return matchSearch && matchStrength && matchType && matchFlavor;
   });
 
   const rankingData = userList.map(u => {
@@ -1140,20 +1177,20 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     const dup = snusList.find(s => similarName(s.name, adminNewSnus.name));
     if (dup && !window.confirm(`"${dup.name}" finnes allerede. Vil du legge til likevel?`)) return;
     await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
-    setAdminNewSnus({ name: "", brand: "", type: "", strength: "3", description: "" });
+    setAdminNewSnus({ name: "", brand: "", type: "", strength: "3", description: "", nicotine: "", flavors: [] });
     fetchSnus(); alert("Snus lagt til!");
   };
 
   const adminUpdateSnus = async () => {
     if (!editingSnus) return;
-    await updateDoc(doc(db, "snus", editingSnus.id), { name: editingSnus.name, brand: editingSnus.brand, type: editingSnus.type, strength: editingSnus.strength, description: editingSnus.description || "", barcode: editingSnus.barcode || "" });
+    await updateDoc(doc(db, "snus", editingSnus.id), { name: editingSnus.name, brand: editingSnus.brand, type: editingSnus.type, strength: editingSnus.strength, description: editingSnus.description || "", barcode: editingSnus.barcode || "", nicotine: editingSnus.nicotine || "", flavors: editingSnus.flavors || [] });
     setEditingSnus(null); fetchSnus(); alert("Oppdatert!");
   };
 
   const approvePending = async (item) => {
     const dup = snusList.find(s => similarName(s.name, item.name));
     if (dup && !window.confirm(`"${dup.name}" finnes allerede. Vil du godkjenne likevel?`)) return;
-    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", description: item.description || "", avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
+    await addDoc(collection(db, "snus"), { name: item.name, brand: item.brand, type: item.type, strength: item.strength, barcode: item.barcode || "", description: item.description || "", nicotine: item.nicotine || "", flavors: item.flavors || [], avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
     await deleteDoc(doc(db, "snus_pending", item.id));
     if (item.submittedByUid) {
       const snap = await getDoc(doc(db, "users", item.submittedByUid));
@@ -1279,6 +1316,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
   return (
     <div style={s.app}>
+      <datalist id="snus-brands">{SNUS_BRANDS.map(b => <option key={b} value={b} />)}</datalist>
       {showScanner && <BarcodeScanner onResult={handleScanResult} onClose={() => setShowScanner(false)} />}
       {unknownBarcode && <UnknownBarcodeModal barcode={unknownBarcode} snusList={snusList} onMatch={handleBarcodeMatch} onSuggest={handleBarcodeSuggest} onClose={() => setUnknownBarcode(null)} />}
       {barcodeMatched && (
@@ -1427,6 +1465,14 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <button key={t} style={s.filterBtn(filterType === t)} onClick={() => setFilterType(filterType === t ? "" : t)}>{t}</button>
               ))}
             </div>
+            {uniqueFlavors.length > 0 && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                <button style={s.filterBtn(!filterFlavor)} onClick={() => setFilterFlavor("")}>Alle smaker</button>
+                {uniqueFlavors.map(f => (
+                  <button key={f} style={s.filterBtn(filterFlavor === f)} onClick={() => setFilterFlavor(filterFlavor === f ? "" : f)}>{f}</button>
+                ))}
+              </div>
+            )}
             <div style={s.sectionTitle}>Snus ({filtered.length})</div>
             {filtered.map(sn => (
               <div key={sn.id} style={s.card} onClick={() => openSnus(sn)}>
@@ -1434,7 +1480,8 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{sn.name}</div>
                     <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{sn.brand} · {sn.type}</div>
-                    <FlameStrength value={sn.strength} />
+                    <StrengthLine snus={sn} />
+                    <FlavorTags flavors={sn.flavors} />
                     {sn.description && <div style={{ fontSize: 12, color: "#555", marginTop: 6, fontStyle: "italic" }}>{sn.description}</div>}
                   </div>
                   <div style={{ textAlign: "right", marginLeft: 12 }}>
@@ -1497,7 +1544,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div>
                   <div style={{ fontSize: 11, color: "#555", marginBottom: 3 }}>{sn.brand}</div>
-                  <FlameStrength value={sn.strength} />
+                  <StrengthLine snus={sn} />
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{(sn.avgRating || 0).toFixed(1)}</div>
@@ -1590,7 +1637,8 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={s.card} onClick={() => openSnus(favSnusObj)}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
-                  <FlameStrength value={favSnusObj.strength} />
+                  <StrengthLine snus={favSnusObj} />
+                  <FlavorTags flavors={favSnusObj.flavors} />
                 </div>
               </div>
             )}
@@ -1727,7 +1775,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             <span style={s.label}>Produktnavn</span>
             <input style={s.input} placeholder="f.eks. General White" value={adminNewSnus.name} onChange={e => setAdminNewSnus({...adminNewSnus, name: e.target.value})} />
             <span style={s.label}>Merke</span>
-            <input style={s.input} placeholder="f.eks. Swedish Match" value={adminNewSnus.brand} onChange={e => setAdminNewSnus({...adminNewSnus, brand: e.target.value})} />
+            <input style={s.input} list="snus-brands" placeholder="f.eks. Swedish Match" value={adminNewSnus.brand} onChange={e => setAdminNewSnus({...adminNewSnus, brand: e.target.value})} />
             <span style={s.label}>Type</span>
             <select style={s.input} value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})}>
               <option value="">Velg type</option>
@@ -1736,6 +1784,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             </select>
             <span style={s.label}>Styrke</span>
             <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
+            <span style={s.label}>Nikotin (mg/g)</span>
+            <input style={s.input} type="number" inputMode="decimal" placeholder="f.eks. 8" value={adminNewSnus.nicotine || ""} onChange={e => setAdminNewSnus({...adminNewSnus, nicotine: e.target.value})} />
+            <span style={s.label}>Smaksprofil</span>
+            <FlavorPicker value={adminNewSnus.flavors} onChange={fl => setAdminNewSnus({...adminNewSnus, flavors: fl})} />
             <span style={s.label}>Beskrivelse</span>
             <input style={s.input} placeholder="f.eks. Klassisk tobakkssmak" value={adminNewSnus.description || ""} onChange={e => setAdminNewSnus({...adminNewSnus, description: e.target.value})} />
             <span style={s.label}>Strekkode (EAN)</span>
@@ -1748,7 +1800,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <span style={s.label}>Produktnavn</span>
                 <input style={s.input} value={editingSnus.name} onChange={e => setEditingSnus({...editingSnus, name: e.target.value})} />
                 <span style={s.label}>Merke</span>
-                <input style={s.input} value={editingSnus.brand} onChange={e => setEditingSnus({...editingSnus, brand: e.target.value})} />
+                <input style={s.input} list="snus-brands" value={editingSnus.brand} onChange={e => setEditingSnus({...editingSnus, brand: e.target.value})} />
                 <span style={s.label}>Type</span>
                 <select style={s.input} value={editingSnus.type} onChange={e => setEditingSnus({...editingSnus, type: e.target.value})}>
                   <option value="">Velg type</option>
@@ -1757,6 +1809,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </select>
                 <span style={s.label}>Styrke</span>
                 <StrengthSelector value={editingSnus.strength} onChange={v => setEditingSnus({...editingSnus, strength: v})} />
+                <span style={s.label}>Nikotin (mg/g)</span>
+                <input style={s.input} type="number" inputMode="decimal" placeholder="f.eks. 8" value={editingSnus.nicotine || ""} onChange={e => setEditingSnus({...editingSnus, nicotine: e.target.value})} />
+                <span style={s.label}>Smaksprofil</span>
+                <FlavorPicker value={editingSnus.flavors || []} onChange={fl => setEditingSnus({...editingSnus, flavors: fl})} />
                 <span style={s.label}>Beskrivelse</span>
                 <input style={s.input} value={editingSnus.description || ""} onChange={e => setEditingSnus({...editingSnus, description: e.target.value})} />
                 <span style={s.label}>Strekkode</span>
@@ -1811,7 +1867,8 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 2 }}>{selectedSnus.name}</div>
             <div style={{ fontSize: 12, color: "#555", marginBottom: 4 }}>{selectedSnus.brand} · {selectedSnus.type}</div>
-            <FlameStrength value={selectedSnus.strength} />
+            <StrengthLine snus={selectedSnus} />
+            <FlavorTags flavors={selectedSnus.flavors} />
             {selectedSnus.description && <div style={{ fontSize: 13, color: "#666", marginTop: 8, fontStyle: "italic" }}>{selectedSnus.description}</div>}
             <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0", flexWrap: "wrap" }}>
               <StarRating value={Math.round(selectedSnus.avgRating || 0)} size={18} />
@@ -1890,7 +1947,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <span style={s.label}>Produktnavn</span>
                 <input style={s.input} placeholder="f.eks. General Onyx" value={newSnus.name} onChange={e => setNewSnus({...newSnus, name: e.target.value})} />
                 <span style={s.label}>Merke</span>
-                <input style={s.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
+                <input style={s.input} list="snus-brands" placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
                 <span style={s.label}>Type</span>
                 <select style={s.input} value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})}>
                   <option value="">Velg type</option>
@@ -1899,6 +1956,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </select>
                 <span style={s.label}>Styrke</span>
                 <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
+                <span style={s.label}>Nikotin (mg/g)</span>
+                <input style={s.input} type="number" inputMode="decimal" placeholder="f.eks. 8" value={newSnus.nicotine || ""} onChange={e => setNewSnus({...newSnus, nicotine: e.target.value})} />
+                <span style={s.label}>Smaksprofil</span>
+                <FlavorPicker value={newSnus.flavors} onChange={fl => setNewSnus({...newSnus, flavors: fl})} />
                 <span style={s.label}>Beskrivelse (valgfritt)</span>
                 <input style={s.input} placeholder="f.eks. Klassisk tobakkssmak" value={newSnus.description || ""} onChange={e => setNewSnus({...newSnus, description: e.target.value})} />
                 <button style={{ ...s.btn, marginTop: 16 }} onClick={submitNewSnus}>Send til admin</button>
