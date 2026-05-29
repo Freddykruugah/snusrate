@@ -1307,7 +1307,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             {rankedList.slice(0, 10).map((u, i) => {
               const isMe = u.displayName === displayName;
               return (
-style={{ display: "flex", alignItems: "center", gap: 12, padding: isMe ? "12px 8px" : "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", background: isMe ? "rgba(232,184,75,0.05)" : "none", borderRadius: isMe ? 8 : 0 }} onClick={() => setViewingUser(u.displayName)}></>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: isMe ? "12px 8px" : "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", background: isMe ? "rgba(232,184,75,0.05)" : "none", borderRadius: isMe ? 8 : 0 }} onClick={() => setViewingUser(u.displayName)}>
                     {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
                   </div>
                   <div style={{ fontSize: 28 }}>{u.avatar || "🤠"}</div>
