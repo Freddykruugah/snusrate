@@ -815,26 +815,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const myRankData = rankedList.find(u => u.displayName === displayName);
 
   // Finn duplikater
-  const findDuplicates = () => {
-    const groups = [];
-    const used = new Set();
-    for (let i = 0; i < snusList.length; i++) {
-      if (used.has(snusList[i].id)) continue;
-      const group = [snusList[i]];
-      for (let j = i + 1; j < snusList.length; j++) {
-        if (used.has(snusList[j].id)) continue;
-        if (similarName(snusList[i].name, snusList[j].name)) {
-          group.push(snusList[j]);
-          used.add(snusList[j].id);
-        }
-      }
-      if (group.length > 1) {
-        used.add(snusList[i].id);
-        groups.push(group);
-      }
-    }
-    setDuplicates(groups);
-  };
+  
 
   useEffect(() => {
     onAuthStateChanged(auth, async u => {
