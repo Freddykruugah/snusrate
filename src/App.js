@@ -111,7 +111,7 @@ const BADGE_GUIDE = [
     category: "📅 Pålogging streak",
     badges: [
       { title: "🌱 Trofast snuser", desc: "3 dager pålogget på rad" },
-      { title: "💪 Ukentlig snuser", desc: "7 dager pålogget på rad" },
+      { title: "💪 Ukentlig snuser", desc: "7 dager på rad" },
       { title: "⚡ Dedikert snuser", desc: "14 dager på rad" },
       { title: "🔥 Snusfanatiker", desc: "30 dager på rad" },
       { title: "👑 Snuslegend", desc: "60 dager på rad" },
@@ -303,30 +303,19 @@ function HamburgerMenu({ onClose, onInstall }) {
 function InstallModal({ onClose }) {
   const [isIOS, setIsIOS] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-
   useEffect(() => {
     setIsIOS(/iPhone|iPad|iPod/.test(navigator.userAgent));
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); setDeferredPrompt(e); });
   }, []);
-
   const installAndroid = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      onClose();
-    }
+    if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; onClose(); }
   };
-
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px" },
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
   };
-
   return (
     <div style={st.modal} onClick={onClose}>
       <div style={st.box} onClick={e => e.stopPropagation()}>
@@ -645,6 +634,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
+  const [rankingCategory, setRankingCategory] = useState("vurderinger");
 
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
@@ -663,14 +653,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const myRefCode = userProfile?.refCode || "";
   const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
   const daysSinceLogin = daysSince(userProfile?.lastLogin);
-
-  const filtered = snusList.filter(s => {
-    const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase());
-    const matchStrength = !filterStrength || s.strength === filterStrength;
-    const matchType = !filterType || s.type?.toLowerCase().includes(filterType.toLowerCase());
-    return matchSearch && matchStrength && matchType;
-  });
-
   const topFavSnus = [...snusList].sort((a, b) => (b.favCount || 0) - (a.favCount || 0)).slice(0, 10);
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
   const filteredUsers = userList.filter(u =>
@@ -679,6 +661,41 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     u.country?.toLowerCase().includes(userSearch.toLowerCase())
   );
 
+  const filtered = snusList.filter(s => {
+    const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase());
+    const matchStrength = !filterStrength || s.strength === filterStrength;
+    const matchType = !filterType || s.type?.toLowerCase().includes(filterType.toLowerCase());
+    return matchSearch && matchStrength && matchType;
+  });
+
+  // Ranking data
+  const rankingData = userList.map(u => {
+    const reviews = snusList.flatMap(s => (s.reviews || []).filter(r => r.user === u.displayName));
+    const likes = countLikesReceived(reviews);
+    const streak = calculateStreak(reviews);
+    return { ...u, reviewCount: reviews.length, likesReceived: likes, ratingStreak: streak };
+  });
+
+  const getRanking = () => {
+    if (rankingCategory === "vurderinger") return [...rankingData].sort((a, b) => b.reviewCount - a.reviewCount);
+    if (rankingCategory === "streak") return [...rankingData].sort((a, b) => (b.loginStreak || 0) - (a.loginStreak || 0));
+    if (rankingCategory === "likes") return [...rankingData].sort((a, b) => b.likesReceived - a.likesReceived);
+    if (rankingCategory === "invitasjoner") return [...rankingData].sort((a, b) => (b.inviteCount || 0) - (a.inviteCount || 0));
+    return rankingData;
+  };
+
+  const getRankingValue = (u) => {
+    if (rankingCategory === "vurderinger") return `${u.reviewCount} vurderinger`;
+    if (rankingCategory === "streak") return `${u.loginStreak || 0} dager`;
+    if (rankingCategory === "likes") return `${u.likesReceived} likes`;
+    if (rankingCategory === "invitasjoner") return `${u.inviteCount || 0} inviterte`;
+    return "";
+  };
+
+  const rankedList = getRanking();
+  const myRank = rankedList.findIndex(u => u.displayName === displayName) + 1;
+  const myRankData = rankedList.find(u => u.displayName === displayName);
+
   useEffect(() => {
     onAuthStateChanged(auth, async u => {
       setUser(u);
@@ -686,15 +703,14 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         fetchUserProfile(u.uid);
         fetchBuddyRequests(u.uid);
         fetchBuddies(u.uid);
-        try {
-          await updateDoc(doc(db, "users", u.uid), { lastLogin: new Date().toISOString() });
-        } catch(e) {}
+        try { await updateDoc(doc(db, "users", u.uid), { lastLogin: new Date().toISOString() }); } catch(e) {}
       }
     });
     fetchSnus();
   }, []);
 
   useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); fetchUsers(); } }, [isAdmin]);
+  useEffect(() => { if (user) fetchUsers(); }, [user]);
 
   const fetchSnus = async () => {
     try {
@@ -730,7 +746,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           await updateDoc(doc(db, "users", uid), { refCode });
           data.refCode = refCode;
         }
-        // Beregn login streak
         const lastLogin = data.lastLogin ? new Date(data.lastLogin) : null;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -749,8 +764,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           data.loginStreak = 1;
           await updateDoc(doc(db, "users", uid), { loginStreak: 1 });
         }
-        setUserProfile(data);
-        setProfileForm(data);
+        setUserProfile(data); setProfileForm(data);
       }
     } catch(e) {}
   };
@@ -759,8 +773,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     try {
       const snap = await getDocs(query(collection(db, "buddy_requests"), where("toUid", "==", uid), where("status", "==", "pending")));
       const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setBuddyRequests(requests);
-      setNotifCount(requests.length);
+      setBuddyRequests(requests); setNotifCount(requests.length);
     } catch(e) {}
   };
 
@@ -999,6 +1012,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     buddyCard: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" },
     badge: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e8b84b" },
     filterBtn: (active) => ({ background: active ? "#1e1e1e" : "none", border: active ? "1px solid #e8b84b" : "1px solid #333", borderRadius: 20, padding: "5px 12px", color: active ? "#e8b84b" : "#555", cursor: "pointer", fontSize: 11, fontWeight: 700 }),
+    rankBtn: (active) => ({ flex: 1, padding: "10px 4px", background: active ? "#1e1e1e" : "none", border: "none", borderBottom: active ? "2px solid #e8b84b" : "2px solid transparent", color: active ? "#e8b84b" : "#555", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }),
   };
 
   if (!user) return (
@@ -1116,7 +1130,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       </div>
 
       <div style={s.nav}>
-        {[["hjem","Hjem"],["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["favoritter","Favoritter"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
+        {[["hjem","Hjem"],["explore","Utforsk"],["vurderinger","Vurderinger"],["topp","Topp 10"],["ranking","Ranking"],["profil","Profil"], ...(isAdmin ? [["admin","Admin"]] : [])].map(([k,l]) => (
           <button key={k} style={s.navBtn(tab===k)} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -1130,16 +1144,13 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               <div style={{ fontSize: 22, fontWeight: 700, color: "#e8b84b" }}>Velkommen tilbake</div>
               <div style={{ fontSize: 15, color: "#e8e0d0", marginTop: 4 }}>@{displayName}</div>
               {daysSinceLogin !== null && daysSinceLogin > 0 && (
-                <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>
-                  Du var her for <span style={{ color: "#e8b84b" }}>{daysSinceLogin} dag{daysSinceLogin !== 1 ? "er" : ""}</span> siden
-                </div>
+                <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>Du var her for <span style={{ color: "#e8b84b" }}>{daysSinceLogin} dag{daysSinceLogin !== 1 ? "er" : ""}</span> siden</div>
               )}
               {daysSinceLogin === 0 && (
                 <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>Du var her <span style={{ color: "#e8b84b" }}>tidligere i dag</span></div>
               )}
             </div>
 
-            {/* Badges */}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
               <span style={s.badge}>{ratingTitle}</span>
               {productTitle && <span style={s.badge}>{productTitle}</span>}
@@ -1148,7 +1159,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               {inviteTitle && <span style={s.badge}>{inviteTitle}</span>}
             </div>
 
-            {/* Login streak */}
             {(userProfile?.loginStreak || 0) > 0 && (
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 16px", marginBottom: 16, textAlign: "center" }}>
                 <div style={{ fontSize: 22 }}>📅</div>
@@ -1173,7 +1183,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px" }} onClick={() => setShowScanner(true)}>
               📷 Skann snus
             </button>
-
             <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 20 }} onClick={() => setTab("explore")}>
               🔍 Utforsk alle snus
             </button>
@@ -1222,6 +1231,22 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </div>
               </div>
             ))}
+
+            {/* Favoritter seksjonen */}
+            <div style={{ ...s.sectionTitle, marginTop: 24 }}>⭐ Mest favorittmarkert</div>
+            {topFavSnus.filter(sn => (sn.favCount || 0) > 0).map((sn, i) => (
+              <div key={sn.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(sn)}>
+                <div style={{ fontSize: i < 3 ? 18 : 14, fontWeight: 900, width: 28, textAlign: "center" }}>
+                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{sn.name}</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>{sn.brand}</div>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>⭐ {sn.favCount}</div>
+              </div>
+            ))}
+
             <button style={s.btn} onClick={() => { setShowAddForm(true); setAddSubmitted(false); }}>+ Foreslå ny snus</button>
           </>
         )}
@@ -1270,25 +1295,51 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           </>
         )}
 
-        {tab === "favoritter" && (
+        {tab === "ranking" && (
           <>
-            <div style={s.sectionTitle}>Mest favorittmarkert</div>
-            {topFavSnus.map((sn, i) => (
-              <div key={sn.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(sn)}>
-                <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, width: 30, textAlign: "center" }}>
-                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#e8b84b", marginBottom: 16 }}>🏆 Ranking</div>
+            <div style={{ display: "flex", borderBottom: "1px solid #1a1a1a", marginBottom: 20 }}>
+              {[["vurderinger","⭐ Vurderinger"],["streak","🔥 Streak"],["likes","👍 Likes"],["invitasjoner","📣 Invitert"]].map(([k,l]) => (
+                <button key={k} style={s.rankBtn(rankingCategory === k)} onClick={() => setRankingCategory(k)}>{l}</button>
+              ))}
+            </div>
+
+            {rankedList.slice(0, 10).map((u, i) => {
+              const isMe = u.displayName === displayName;
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", background: isMe ? "rgba(232,184,75,0.05)" : "none", borderRadius: isMe ? 8 : 0, padding: isMe ? "12px 8px" : "12px 0" }} onClick={() => setViewingUser(u.displayName)}>
+                  <div style={{ fontSize: i < 3 ? 22 : 15, fontWeight: 900, width: 32, textAlign: "center", color: i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#555" }}>
+                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                  </div>
+                  <div style={{ fontSize: 28 }}>{u.avatar || "🤠"}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: isMe ? "#e8b84b" : "#e8e0d0" }}>@{u.displayName}{isMe ? " (deg)" : ""}</div>
+                    <div style={{ fontSize: 11, color: "#555" }}>{COUNTRY_FLAGS[u.country] || "🌍"} {u.city ? `${u.city}, ` : ""}{u.country}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: "#e8b84b" }}>{getRankingValue(u).split(" ")[0]}</div>
+                    <div style={{ fontSize: 10, color: "#444" }}>{getRankingValue(u).split(" ").slice(1).join(" ")}</div>
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginBottom: 3 }}>{sn.brand}</div>
-                  <FlameStrength value={sn.strength} />
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>⭐ {sn.favCount || 0}</div>
-                  <div style={{ fontSize: 10, color: "#444" }}>favoritter</div>
+              );
+            })}
+
+            {myRank > 10 && myRankData && (
+              <div style={{ marginTop: 16, borderTop: "1px dashed #2a2a2a", paddingTop: 16 }}>
+                <div style={{ fontSize: 10, color: "#444", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Din plassering</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 8px", background: "rgba(232,184,75,0.05)", borderRadius: 8 }}>
+                  <div style={{ fontSize: 15, fontWeight: 900, width: 32, textAlign: "center", color: "#555" }}>{myRank}</div>
+                  <div style={{ fontSize: 28 }}>{myAvatar}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b84b" }}>@{displayName}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: "#e8b84b" }}>{getRankingValue(myRankData).split(" ")[0]}</div>
+                    <div style={{ fontSize: 10, color: "#444" }}>{getRankingValue(myRankData).split(" ").slice(1).join(" ")}</div>
+                  </div>
                 </div>
               </div>
-            ))}
+            )}
           </>
         )}
 
