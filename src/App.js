@@ -851,7 +851,25 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
   useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); } }, [isAdmin]);
   useEffect(() => { if (user) fetchUsers(); }, [user]);
-  useEffect(() => { if (snusList.length > 0) findDuplicates(); }, [snusList]);
+  useEffect(() => {
+  if (snusList.length > 0) {
+    const groups = [];
+    const used = new Set();
+    for (let i = 0; i < snusList.length; i++) {
+      if (used.has(snusList[i].id)) continue;
+      const group = [snusList[i]];
+      for (let j = i + 1; j < snusList.length; j++) {
+        if (used.has(snusList[j].id)) continue;
+        if (similarName(snusList[i].name, snusList[j].name)) {
+          group.push(snusList[j]);
+          used.add(snusList[j].id);
+        }
+      }
+      if (group.length > 1) { used.add(snusList[i].id); groups.push(group); }
+    }
+    setDuplicates(groups);
+  }
+}, [snusList]);
 
   const fetchSnus = async () => {
     try {
