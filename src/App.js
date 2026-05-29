@@ -188,6 +188,10 @@ const calculateStreak = (reviews) => {
 
 const countLikesReceived = (reviews) => reviews.reduce((sum, r) => sum + (r.likes?.length || 0), 0);
 
+const plural = (n, sing, plur) => `${n} ${n === 1 ? sing : plur}`;
+
+const SNUS_TYPES = ["Brun Portion", "Brun Løs", "White Portion", "White Dry", "Helhvit Portion", "Helhvit Slim", "Helhvit Mini", "Helhvit Mini Portion", "Annet"];
+
 const generateRefCode = (displayName) => {
   return displayName.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.random().toString(36).slice(2, 6);
 };
@@ -446,7 +450,11 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
             <span style={st.label}>Merke</span>
             <input style={st.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
             <span style={st.label}>Type</span>
-            <input style={st.input} placeholder="f.eks. White Portion" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
+            <select style={st.input} value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})}>
+              <option value="">Velg type</option>
+              {SNUS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              {newSnus.type && !SNUS_TYPES.includes(newSnus.type) && <option value={newSnus.type}>{newSnus.type}</option>}
+            </select>
             <span style={st.label}>Styrke</span>
             <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
             <button style={st.btn} onClick={() => onSuggest({ ...newSnus, barcode })}>Send til admin</button>
@@ -652,7 +660,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, currentUs
               )}
               {favSnusObj && (
                 <div style={{ marginTop: 16, marginBottom: 8 }}>
-                  <div style={st.sectionTitle}>Favorittsnuus</div>
+                  <div style={st.sectionTitle}>Favorittsnus</div>
                   <div style={st.card} onClick={() => { onOpenSnus(favSnusObj); onClose(); }}>
                     <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
                     <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
@@ -770,7 +778,11 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const inviteTitle = getInviteTitle(userProfile?.inviteCount || 0);
   const loginStreakTitle = getLoginStreakTitle(userProfile?.loginStreak || 0);
   const myRefCode = userProfile?.refCode || "";
-  const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
+  const uniqueTypes = Object.values(snusList.reduce((acc, s) => {
+    const t = (s.type || "").trim();
+    if (t && !acc[t.toLowerCase()]) acc[t.toLowerCase()] = t;
+    return acc;
+  }, {})).sort();
   const daysSinceLogin = daysSince(userProfile?.lastLogin);
   const topFavSnus = [...snusList].sort((a, b) => (b.favCount || 0) - (a.favCount || 0)).slice(0, 10);
   const favSnusObj = snusList.find(s => s.id === userProfile?.favoriteSnus);
@@ -803,10 +815,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   };
 
   const getRankingValue = (u) => {
-    if (rankingCategory === "vurderinger") return `${u.reviewCount} vurderinger`;
-    if (rankingCategory === "streak") return `${u.loginStreak || 0} dager`;
-    if (rankingCategory === "likes") return `${u.likesReceived} likes`;
-    if (rankingCategory === "invitasjoner") return `${u.inviteCount || 0} inviterte`;
+    if (rankingCategory === "vurderinger") return plural(u.reviewCount, "vurdering", "vurderinger");
+    if (rankingCategory === "streak") return plural(u.loginStreak || 0, "dag", "dager");
+    if (rankingCategory === "likes") return plural(u.likesReceived, "like", "likes");
+    if (rankingCategory === "invitasjoner") return plural(u.inviteCount || 0, "invitert", "inviterte");
     return "";
   };
 
@@ -824,7 +836,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         fetchUserProfile(u.uid);
         fetchBuddyRequests(u.uid);
         fetchBuddies(u.uid);
-        try { await updateDoc(doc(db, "users", u.uid), { lastLogin: new Date().toISOString() }); } catch(e) {}
       }
     });
     fetchSnus();
@@ -889,21 +900,19 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         const lastLogin = data.lastLogin ? new Date(data.lastLogin) : null;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        let newStreak = data.loginStreak || 0;
         if (lastLogin) {
           const lastLoginDay = new Date(lastLogin);
           lastLoginDay.setHours(0, 0, 0, 0);
           const diff = Math.round((today - lastLoginDay) / (1000 * 60 * 60 * 24));
-          if (diff === 1) {
-            data.loginStreak = (data.loginStreak || 0) + 1;
-            await updateDoc(doc(db, "users", uid), { loginStreak: data.loginStreak });
-          } else if (diff > 1) {
-            data.loginStreak = 1;
-            await updateDoc(doc(db, "users", uid), { loginStreak: 1 });
-          }
+          if (diff === 0) newStreak = Math.max(newStreak, 1);
+          else if (diff === 1) newStreak = newStreak + 1;
+          else newStreak = 1;
         } else {
-          data.loginStreak = 1;
-          await updateDoc(doc(db, "users", uid), { loginStreak: 1 });
+          newStreak = 1;
         }
+        data.loginStreak = newStreak;
+        await updateDoc(doc(db, "users", uid), { loginStreak: newStreak, lastLogin: new Date().toISOString() });
         setUserProfile(data); setProfileForm(data);
       }
     } catch(e) {}
@@ -1385,7 +1394,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               </div>
             )}
             <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-              {[[snusList.length, "Produkter", null],[allReviews.length, "Vurderinger", null],[buddies.length, "Buddies", () => setShowBuddyList(true)]].map(([val, label, onClick], i) => (
+              {[[snusList.length, "Produkter", null],[myReviews.length, "Vurderinger", null],[buddies.length, "Buddies", () => setShowBuddyList(true)]].map(([val, label, onClick], i) => (
                 <div key={i} style={{ ...s.statBox, cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
                   <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
                   <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
@@ -1430,7 +1439,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                   </div>
                   <div style={{ textAlign: "right", marginLeft: 12 }}>
                     <div style={{ fontSize: 22, fontWeight: 900, color: "#e8b84b" }}>{(sn.avgRating || 0).toFixed(1)}</div>
-                    <div style={{ fontSize: 10, color: "#555" }}>{sn.totalRatings || 0} ratings</div>
+                    <div style={{ fontSize: 10, color: "#555" }}>{plural(sn.totalRatings || 0, "vurdering", "vurderinger")}</div>
                   </div>
                 </div>
               </div>
@@ -1477,7 +1486,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         {tab === "topp" && (
           <>
             <div style={s.sectionTitle}>Høyest rated</div>
-            {snusList.map((sn, i) => (
+            {(() => {
+              const ranked = [...snusList].filter(sn => (sn.totalRatings || 0) > 0).sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0)).slice(0, 10);
+              if (ranked.length === 0) return <div style={{ color: "#444", fontSize: 13, textAlign: "center", marginTop: 40 }}>Ingen vurderte produkter ennå</div>;
+              return ranked.map((sn, i) => (
               <div key={sn.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(sn)}>
                 <div style={{ fontSize: i < 3 ? 20 : 16, fontWeight: 900, width: 30, textAlign: "center" }}>
                   {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
@@ -1489,10 +1501,11 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{(sn.avgRating || 0).toFixed(1)}</div>
-                  <div style={{ fontSize: 10, color: "#444" }}>{sn.totalRatings || 0} ratings</div>
+                  <div style={{ fontSize: 10, color: "#444" }}>{plural(sn.totalRatings || 0, "vurdering", "vurderinger")}</div>
                 </div>
               </div>
-            ))}
+              ));
+            })()}
           </>
         )}
 
@@ -1506,10 +1519,12 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             </div>
             {rankedList.slice(0, 10).map((u, i) => {
               const isMe = u.displayName === displayName;
+              const rankVal = parseInt(getRankingValue(u)) || 0;
+              const medaled = i < 3 && rankVal > 0;
               return (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: isMe ? "12px 8px" : "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", background: isMe ? "rgba(232,184,75,0.05)" : "none", borderRadius: isMe ? 8 : 0 }} onClick={() => setViewingUser(u.displayName)}>
-                  <div style={{ fontSize: i < 3 ? 22 : 15, fontWeight: 900, width: 32, textAlign: "center", color: i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#555" }}>
-                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                  <div style={{ fontSize: medaled ? 22 : 15, fontWeight: 900, width: 32, textAlign: "center", color: medaled ? (i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : "#CD7F32") : "#555" }}>
+                    {medaled ? (i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉") : i + 1}
                   </div>
                   <div style={{ fontSize: 28 }}>{u.avatar || "🤠"}</div>
                   <div style={{ flex: 1 }}>
@@ -1561,7 +1576,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              {[[myReviews.length,"Vurderinger",null],[myAvgRating,"Snitt",null],[myLikesReceived,"Likes",null],[`${myStreak}🔥`,"Streak",null],[buddies.length,"Buddies",() => setShowBuddyList(true)]].map(([val, label, onClick], i) => (
+              {[[myReviews.length,"Vurderinger",null],[myAvgRating,"Snitt",null],[myLikesReceived,"Likes",null],[`${userProfile?.loginStreak || 0}🔥`,"Streak",null],[buddies.length,"Buddies",() => setShowBuddyList(true)]].map(([val, label, onClick], i) => (
                 <div key={i} style={{ ...s.statBox, padding: "10px 6px" }} onClick={onClick}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
                   <div style={{ fontSize: 8, color: "#555", marginTop: 3, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
@@ -1571,7 +1586,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 16 }} onClick={() => setShowInvite(true)}>📣 Inviter venner · {userProfile?.inviteCount || 0} inviterte</button>
             {favSnusObj && (
               <div style={{ marginBottom: 20 }}>
-                <div style={s.sectionTitle}>Favorittsnuus</div>
+                <div style={s.sectionTitle}>Favorittsnus</div>
                 <div style={s.card} onClick={() => openSnus(favSnusObj)}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
@@ -1628,9 +1643,9 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </select>
                 <span style={s.label}>By</span>
                 <input style={s.input} value={profileForm.city || ""} onChange={e => setProfileForm({...profileForm, city: e.target.value})} placeholder="f.eks. Oslo" />
-                <span style={s.label}>Favorittsnuus</span>
+                <span style={s.label}>Favorittsnus</span>
                 <select style={s.select} value={profileForm.favoriteSnus || ""} onChange={e => setProfileForm({...profileForm, favoriteSnus: e.target.value})}>
-                  <option value="">Velg favorittsnuus</option>
+                  <option value="">Velg favorittsnus</option>
                   {snusList.map(sn => <option key={sn.id} value={sn.id}>{sn.name}</option>)}
                 </select>
                 <button style={s.btn} onClick={saveProfile}>Lagre</button>
@@ -1700,7 +1715,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                         <div style={{ fontSize: 11, color: "#555" }}>{COUNTRY_FLAGS[u.country] || "🌍"} {u.city ? `${u.city}, ` : ""}{u.country}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 12, color: "#666" }}>{reviewCount} ratings</div>
+                        <div style={{ fontSize: 12, color: "#666" }}>{plural(reviewCount, "vurdering", "vurderinger")}</div>
                       </div>
                     </div>
                   );
@@ -1714,7 +1729,11 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             <span style={s.label}>Merke</span>
             <input style={s.input} placeholder="f.eks. Swedish Match" value={adminNewSnus.brand} onChange={e => setAdminNewSnus({...adminNewSnus, brand: e.target.value})} />
             <span style={s.label}>Type</span>
-            <input style={s.input} placeholder="f.eks. White Portion" value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})} />
+            <select style={s.input} value={adminNewSnus.type} onChange={e => setAdminNewSnus({...adminNewSnus, type: e.target.value})}>
+              <option value="">Velg type</option>
+              {SNUS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              {adminNewSnus.type && !SNUS_TYPES.includes(adminNewSnus.type) && <option value={adminNewSnus.type}>{adminNewSnus.type}</option>}
+            </select>
             <span style={s.label}>Styrke</span>
             <StrengthSelector value={adminNewSnus.strength} onChange={v => setAdminNewSnus({...adminNewSnus, strength: v})} />
             <span style={s.label}>Beskrivelse</span>
@@ -1731,7 +1750,11 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <span style={s.label}>Merke</span>
                 <input style={s.input} value={editingSnus.brand} onChange={e => setEditingSnus({...editingSnus, brand: e.target.value})} />
                 <span style={s.label}>Type</span>
-                <input style={s.input} value={editingSnus.type} onChange={e => setEditingSnus({...editingSnus, type: e.target.value})} />
+                <select style={s.input} value={editingSnus.type} onChange={e => setEditingSnus({...editingSnus, type: e.target.value})}>
+                  <option value="">Velg type</option>
+                  {SNUS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {editingSnus.type && !SNUS_TYPES.includes(editingSnus.type) && <option value={editingSnus.type}>{editingSnus.type}</option>}
+                </select>
                 <span style={s.label}>Styrke</span>
                 <StrengthSelector value={editingSnus.strength} onChange={v => setEditingSnus({...editingSnus, strength: v})} />
                 <span style={s.label}>Beskrivelse</span>
@@ -1869,7 +1892,11 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <span style={s.label}>Merke</span>
                 <input style={s.input} placeholder="f.eks. Swedish Match" value={newSnus.brand} onChange={e => setNewSnus({...newSnus, brand: e.target.value})} />
                 <span style={s.label}>Type</span>
-                <input style={s.input} placeholder="f.eks. White Dry" value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})} />
+                <select style={s.input} value={newSnus.type} onChange={e => setNewSnus({...newSnus, type: e.target.value})}>
+                  <option value="">Velg type</option>
+                  {SNUS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {newSnus.type && !SNUS_TYPES.includes(newSnus.type) && <option value={newSnus.type}>{newSnus.type}</option>}
+                </select>
                 <span style={s.label}>Styrke</span>
                 <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
                 <span style={s.label}>Beskrivelse (valgfritt)</span>
