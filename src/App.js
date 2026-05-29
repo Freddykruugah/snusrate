@@ -1026,15 +1026,15 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
             <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
               {[
-                [snusList.length, "Produkter"],
-                [allReviews.length, "Vurderinger"],
-                [userList.length || "–", "Brukere"],
-              ].map(([val, label], i) => (
-                <div key={i} style={{ ...s.statBox, cursor: "default" }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
-                </div>
-              ))}
+  [snusList.length, "Produkter", null],
+  [allReviews.length, "Vurderinger", null],
+  [buddies.length, "Buddies", () => setShowBuddyList(true)],
+].map(([val, label, onClick], i) => (
+  <div key={i} style={{ ...s.statBox, cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
+    <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
+    <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+  </div>
+))}
             </div>
 
             <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px", background: "#e8b84b" }} onClick={() => setShowScanner(true)}>
