@@ -515,7 +515,7 @@ function CompareModal({ myDisplayName, myReviews, theirProfile, theirReviews, sn
           </div>
         </div>
 
-        <div style={s.sectionTitle}>📊 Statistikk</div>
+        <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 }}>📊 Statistikk</div>
         <StatRow label="Vurderinger" myVal={myReviews.length} theirVal={theirReviews.length} />
         <StatRow label="Snitt" myVal={myAvg} theirVal={theirAvg} />
         <StatRow label="Streak" myVal={`${myStreak}🔥`} theirVal={`${theirStreak}🔥`} />
@@ -523,7 +523,7 @@ function CompareModal({ myDisplayName, myReviews, theirProfile, theirReviews, sn
 
         {commonSnus.length > 0 && (
           <div style={{ marginTop: 20 }}>
-            <div style={{ ...st.sectionTitle, marginBottom: 4 }}>🤝 Felles snus ({commonSnus.length})</div>
+            <div style={{ fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 4, fontWeight: 700 }}>🤝 Felles snus ({commonSnus.length})</div>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 12 }}>Snus dere begge har ratet</div>
             {commonSnus.map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1a1a1a" }}>
