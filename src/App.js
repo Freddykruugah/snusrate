@@ -449,12 +449,121 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
   );
 }
 
-function UserProfileModal({ username, currentUser, currentDisplayName, snusList, onClose, onOpenSnus }) {
+function CompareModal({ myDisplayName, myReviews, theirProfile, theirReviews, snusList, onClose }) {
+  const myAvg = myReviews.length > 0 ? (myReviews.reduce((s, r) => s + r.rating, 0) / myReviews.length).toFixed(1) : "–";
+  const theirAvg = theirReviews.length > 0 ? (theirReviews.reduce((s, r) => s + r.rating, 0) / theirReviews.length).toFixed(1) : "–";
+  const myStreak = calculateStreak(myReviews);
+  const theirStreak = calculateStreak(theirReviews);
+  const myLikes = countLikesReceived(myReviews);
+  const theirLikes = countLikesReceived(theirReviews);
+
+  const myRatedIds = new Set(myReviews.map(r => r.snusId));
+  const theirRatedIds = new Set(theirReviews.map(r => r.snusId));
+  const commonIds = [...myRatedIds].filter(id => theirRatedIds.has(id));
+
+  const commonSnus = commonIds.map(id => {
+    const snus = snusList.find(s => s.id === id);
+    const myR = myReviews.find(r => r.snusId === id);
+    const theirR = theirReviews.find(r => r.snusId === id);
+    const diff = Math.abs((myR?.rating || 0) - (theirR?.rating || 0));
+    const agree = diff <= 1;
+    return { snus, myRating: myR?.rating, theirRating: theirR?.rating, agree };
+  }).filter(x => x.snus);
+
+  const st = {
+    modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 200, display: "flex", alignItems: "flex-end" },
+    box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "92vh", overflowY: "auto" },
+    btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 16 },
+    sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
+    statRow: { display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #1a1a1a" },
+  };
+
+  const StatRow = ({ label, myVal, theirVal }) => {
+    const myNum = parseFloat(myVal);
+    const theirNum = parseFloat(theirVal);
+    const myWins = !isNaN(myNum) && !isNaN(theirNum) && myNum > theirNum;
+    const theirWins = !isNaN(myNum) && !isNaN(theirNum) && theirNum > myNum;
+    return (
+      <div style={st.statRow}>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: myWins ? "#e8b84b" : "#666" }}>{myVal}</div>
+          {myWins && <div style={{ fontSize: 9, color: "#e8b84b", letterSpacing: 1 }}>VINNER</div>}
+        </div>
+        <div style={{ flex: 1, textAlign: "center", fontSize: 11, color: "#444", letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: theirWins ? "#e8b84b" : "#666" }}>{theirVal}</div>
+          {theirWins && <div style={{ fontSize: 9, color: "#e8b84b", letterSpacing: 1 }}>VINNER</div>}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={st.modal} onClick={onClose}>
+      <div style={st.box} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ textAlign: "center", flex: 1 }}>
+            <div style={{ fontSize: 32 }}>🤠</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", marginTop: 4 }}>@{myDisplayName}</div>
+            <div style={{ fontSize: 10, color: "#555" }}>Deg</div>
+          </div>
+          <div style={{ fontSize: 20, color: "#333" }}>⚔️</div>
+          <div style={{ textAlign: "center", flex: 1 }}>
+            <div style={{ fontSize: 32 }}>{theirProfile?.avatar || "🤠"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", marginTop: 4 }}>@{theirProfile?.displayName}</div>
+            <div style={{ fontSize: 10, color: "#555" }}>Dem</div>
+          </div>
+        </div>
+
+        <div style={s.sectionTitle}>📊 Statistikk</div>
+        <StatRow label="Vurderinger" myVal={myReviews.length} theirVal={theirReviews.length} />
+        <StatRow label="Snitt" myVal={myAvg} theirVal={theirAvg} />
+        <StatRow label="Streak" myVal={`${myStreak}🔥`} theirVal={`${theirStreak}🔥`} />
+        <StatRow label="Likes" myVal={myLikes} theirVal={theirLikes} />
+
+        {commonSnus.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ ...st.sectionTitle, marginBottom: 4 }}>🤝 Felles snus ({commonSnus.length})</div>
+            <div style={{ fontSize: 11, color: "#555", marginBottom: 12 }}>Snus dere begge har ratet</div>
+            {commonSnus.map((item, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1a1a1a" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{item.snus.name}</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>{item.agree ? "✅ Enige" : "❌ Uenige"}</div>
+                </div>
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{"★".repeat(item.myRating)}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#333" }}>vs</div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: "#e8b84b" }}>{"★".repeat(item.theirRating)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {commonSnus.length === 0 && (
+          <div style={{ textAlign: "center", padding: "20px 0", color: "#555", fontSize: 13 }}>
+            Ingen felles snus ratet ennå
+          </div>
+        )}
+
+        <button style={st.btnOutline} onClick={onClose}>Lukk</button>
+      </div>
+    </div>
+  );
+}
+
+function UserProfileModal({ username, currentUser, currentDisplayName, currentUserReviews, snusList, onClose, onOpenSnus }) {
   const [profile, setProfile] = useState(null);
   const [userReviews, setUserReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requestSent, setRequestSent] = useState(false);
   const [alreadyBuddy, setAlreadyBuddy] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -495,6 +604,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
     box: { background: "#141414", border: "1px solid #222", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 430, margin: "0 auto", padding: "24px 20px 36px", maxHeight: "88vh", overflowY: "auto" },
     btn: { background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "13px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 },
     btnOutline: { background: "none", color: "#e8b84b", border: "1px solid #e8b84b", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
+    btnSecondary: { background: "none", color: "#888", border: "1px solid #333", borderRadius: 8, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%", marginTop: 8 },
     reviewCard: { background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer" },
     card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer" },
     sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: "#444", textTransform: "uppercase", marginBottom: 14, fontWeight: 700 },
@@ -503,64 +613,79 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
   };
 
   return (
-    <div style={st.modal} onClick={onClose}>
-      <div style={st.box} onClick={e => e.stopPropagation()}>
-        {loading ? <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Laster...</div>
-        : !profile ? <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Bruker ikke funnet</div>
-        : (
-          <>
-            <div style={{ textAlign: "center", paddingBottom: 16 }}>
-              <div style={{ fontSize: 56, marginBottom: 10 }}>{profile.avatar || "🤠"}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
-              <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                {COUNTRY_FLAGS[profile.country] || "🌍"} {profile.city ? `${profile.city}, ` : ""}{profile.country}
-                {profile.age ? ` · ${profile.age} år` : ""}{profile.gender ? ` · ${profile.gender}` : ""}
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
-                <span style={st.badge}>{getRatingTitle(userReviews.length)}</span>
-                {getProductTitle(profile.approvedProducts || 0) && <span style={st.badge}>{getProductTitle(profile.approvedProducts || 0)}</span>}
-                {getStreakTitle(streak) && <span style={st.badge}>{getStreakTitle(streak)}</span>}
-                {loginStreakTitle && <span style={st.badge}>{loginStreakTitle}</span>}
-                {inviteTitle && <span style={st.badge}>{inviteTitle}</span>}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{userReviews.length}</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Vurderinger</div></div>
-              <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{likesReceived}</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Likes</div></div>
-              <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{streak}🔥</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Streak</div></div>
-            </div>
-            {username !== currentDisplayName && (
-              alreadyBuddy ? <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>🤠 Dere er Snusbuddies!</div>
-              : requestSent ? <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>✅ Forespørsel sendt!</div>
-              : <button style={st.btn} onClick={sendRequest}>🤠 Send Snusbuddy-forespørsel</button>
-            )}
-            {favSnusObj && (
-              <div style={{ marginTop: 16, marginBottom: 8 }}>
-                <div style={st.sectionTitle}>Favorittsnuus</div>
-                <div style={st.card} onClick={() => { onOpenSnus(favSnusObj); onClose(); }}>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
-                  <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
-                  <FlameStrength value={favSnusObj.strength} />
+    <>
+      {showCompare && profile && (
+        <CompareModal
+          myDisplayName={currentDisplayName}
+          myReviews={currentUserReviews}
+          theirProfile={profile}
+          theirReviews={userReviews}
+          snusList={snusList}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
+      <div style={st.modal} onClick={onClose}>
+        <div style={st.box} onClick={e => e.stopPropagation()}>
+          {loading ? <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Laster...</div>
+          : !profile ? <div style={{ textAlign: "center", padding: 40, color: "#555" }}>Bruker ikke funnet</div>
+          : (
+            <>
+              <div style={{ textAlign: "center", paddingBottom: 16 }}>
+                <div style={{ fontSize: 56, marginBottom: 10 }}>{profile.avatar || "🤠"}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b" }}>@{profile.displayName}</div>
+                <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                  {COUNTRY_FLAGS[profile.country] || "🌍"} {profile.city ? `${profile.city}, ` : ""}{profile.country}
+                  {profile.age ? ` · ${profile.age} år` : ""}{profile.gender ? ` · ${profile.gender}` : ""}
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
+                  <span style={st.badge}>{getRatingTitle(userReviews.length)}</span>
+                  {getProductTitle(profile.approvedProducts || 0) && <span style={st.badge}>{getProductTitle(profile.approvedProducts || 0)}</span>}
+                  {getStreakTitle(streak) && <span style={st.badge}>{getStreakTitle(streak)}</span>}
+                  {loginStreakTitle && <span style={st.badge}>{loginStreakTitle}</span>}
+                  {inviteTitle && <span style={st.badge}>{inviteTitle}</span>}
                 </div>
               </div>
-            )}
-            {userReviews.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <div style={st.sectionTitle}>Vurderinger ({userReviews.length})</div>
-                {userReviews.map((r, i) => (
-                  <div key={i} style={st.reviewCard} onClick={() => { onOpenSnus(snusList.find(s => s.id === r.snusId)); onClose(); }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{r.snusName}</div>
-                    <StarRating value={r.rating} size={13} />
-                    {r.text && <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>{r.text}</div>}
-                  </div>
-                ))}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{userReviews.length}</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Vurderinger</div></div>
+                <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{countLikesReceived(userReviews)}</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Likes</div></div>
+                <div style={st.statBox}><div style={{ fontSize: 18, fontWeight: 900, color: "#e8b84b" }}>{streak}🔥</div><div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Streak</div></div>
               </div>
-            )}
-            <button style={st.btnOutline} onClick={onClose}>Lukk</button>
-          </>
-        )}
+              {username !== currentDisplayName && (
+                <>
+                  {alreadyBuddy ? <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>🤠 Dere er Snusbuddies!</div>
+                  : requestSent ? <div style={{ textAlign: "center", color: "#e8b84b", fontSize: 13, marginBottom: 12 }}>✅ Forespørsel sendt!</div>
+                  : <button style={st.btn} onClick={sendRequest}>🤠 Send Snusbuddy-forespørsel</button>}
+                  <button style={st.btnSecondary} onClick={() => setShowCompare(true)}>⚔️ Sammenlign med meg</button>
+                </>
+              )}
+              {favSnusObj && (
+                <div style={{ marginTop: 16, marginBottom: 8 }}>
+                  <div style={st.sectionTitle}>Favorittsnuus</div>
+                  <div style={st.card} onClick={() => { onOpenSnus(favSnusObj); onClose(); }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{favSnusObj.name}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>{favSnusObj.brand} · {favSnusObj.type}</div>
+                    <FlameStrength value={favSnusObj.strength} />
+                  </div>
+                </div>
+              )}
+              {userReviews.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={st.sectionTitle}>Vurderinger ({userReviews.length})</div>
+                  {userReviews.map((r, i) => (
+                    <div key={i} style={st.reviewCard} onClick={() => { onOpenSnus(snusList.find(s => s.id === r.snusId)); onClose(); }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{r.snusName}</div>
+                      <StarRating value={r.rating} size={13} />
+                      {r.text && <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>{r.text}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button style={st.btnOutline} onClick={onClose}>Lukk</button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -668,7 +793,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     return matchSearch && matchStrength && matchType;
   });
 
-  // Ranking data
   const rankingData = userList.map(u => {
     const reviews = snusList.flatMap(s => (s.reviews || []).filter(r => r.user === u.displayName));
     const likes = countLikesReceived(reviews);
@@ -709,7 +833,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     fetchSnus();
   }, []);
 
-  useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); fetchUsers(); } }, [isAdmin]);
+  useEffect(() => { if (isAdmin) { fetchPending(); fetchReported(); } }, [isAdmin]);
   useEffect(() => { if (user) fetchUsers(); }, [user]);
 
   const fetchSnus = async () => {
@@ -1027,10 +1151,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       <div style={s.content}>
         <div style={{ textAlign: "center", padding: "60px 0 32px" }}>
-  <div style={{ fontSize: 52, fontWeight: 900, color: "#e8b84b", letterSpacing: -1, marginBottom: 6 }}>SnusRate</div>
-  <div style={{ fontSize: 11, letterSpacing: 4, color: "#555", textTransform: "uppercase", marginBottom: 20 }}>Nordic Snus Community</div>
-  <div style={{ fontSize: 16, color: "#888", fontStyle: "italic", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>Rate, utforsk og del din snusopplevelse</div>
-</div>
+          <div style={{ fontSize: 52, fontWeight: 900, color: "#e8b84b", letterSpacing: -1, marginBottom: 6 }}>SnusRate</div>
+          <div style={{ fontSize: 11, letterSpacing: 4, color: "#555", textTransform: "uppercase", marginBottom: 20 }}>Nordic Snus Community</div>
+          <div style={{ fontSize: 16, color: "#888", fontStyle: "italic", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>Rate, utforsk og del din snusopplevelse</div>
+        </div>
         <div style={{ ...s.sectionTitle, textAlign: "center", marginBottom: 20 }}>{authMode === "login" ? "Logg inn" : "Opprett konto"}</div>
         {authMode === "register" && (
           <>
@@ -1089,7 +1213,17 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       )}
       {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} onInstall={() => { setShowMenu(false); setShowInstall(true); }} />}
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
-      {viewingUser && <UserProfileModal username={viewingUser} currentUser={user} currentDisplayName={displayName} snusList={snusList} onClose={() => setViewingUser(null)} onOpenSnus={openSnus} />}
+      {viewingUser && (
+        <UserProfileModal
+          username={viewingUser}
+          currentUser={user}
+          currentDisplayName={displayName}
+          currentUserReviews={myReviews}
+          snusList={snusList}
+          onClose={() => setViewingUser(null)}
+          onOpenSnus={openSnus}
+        />
+      )}
       {showBuddyList && <BuddyListModal buddies={buddies} onSelectBuddy={name => { setShowBuddyList(false); setViewingUser(name); }} onClose={() => setShowBuddyList(false)} />}
 
       {showInvite && (
@@ -1235,8 +1369,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </div>
               </div>
             ))}
-
-            {/* Favoritter seksjonen */}
             <div style={{ ...s.sectionTitle, marginTop: 24 }}>⭐ Mest favorittmarkert</div>
             {topFavSnus.filter(sn => (sn.favCount || 0) > 0).map((sn, i) => (
               <div key={sn.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }} onClick={() => openSnus(sn)}>
@@ -1250,7 +1382,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>⭐ {sn.favCount}</div>
               </div>
             ))}
-
             <button style={s.btn} onClick={() => { setShowAddForm(true); setAddSubmitted(false); }}>+ Foreslå ny snus</button>
           </>
         )}
@@ -1307,11 +1438,10 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <button key={k} style={s.rankBtn(rankingCategory === k)} onClick={() => setRankingCategory(k)}>{l}</button>
               ))}
             </div>
-
             {rankedList.slice(0, 10).map((u, i) => {
               const isMe = u.displayName === displayName;
               return (
-<div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: isMe ? "12px 8px" : "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", background: isMe ? "rgba(232,184,75,0.05)" : "none", borderRadius: isMe ? 8 : 0 }} onClick={() => setViewingUser(u.displayName)}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: isMe ? "12px 8px" : "12px 0", borderBottom: "1px solid #1a1a1a", cursor: "pointer", background: isMe ? "rgba(232,184,75,0.05)" : "none", borderRadius: isMe ? 8 : 0 }} onClick={() => setViewingUser(u.displayName)}>
                   <div style={{ fontSize: i < 3 ? 22 : 15, fontWeight: 900, width: 32, textAlign: "center", color: i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#555" }}>
                     {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
                   </div>
@@ -1327,7 +1457,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 </div>
               );
             })}
-
             {myRank > 10 && myRankData && (
               <div style={{ marginTop: 16, borderTop: "1px dashed #2a2a2a", paddingTop: 16 }}>
                 <div style={{ fontSize: 10, color: "#444", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Din plassering</div>
