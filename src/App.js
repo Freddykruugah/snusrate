@@ -1026,7 +1026,11 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} onInstall={() => { setShowMenu(false); setShowInstall(true); }} />}
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       <div style={s.content}>
-        <div style={{ textAlign: "center", padding: "48px 0 24px", fontSize: 48 }}>🤠</div>
+        <div style={{ textAlign: "center", padding: "60px 0 32px" }}>
+  <div style={{ fontSize: 52, fontWeight: 900, color: "#e8b84b", letterSpacing: -1, marginBottom: 6 }}>SnusRate</div>
+  <div style={{ fontSize: 11, letterSpacing: 4, color: "#555", textTransform: "uppercase", marginBottom: 20 }}>Nordic Snus Community</div>
+  <div style={{ fontSize: 16, color: "#888", fontStyle: "italic", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>Rate, utforsk og del din snusopplevelse</div>
+</div>
         <div style={{ ...s.sectionTitle, textAlign: "center", marginBottom: 20 }}>{authMode === "login" ? "Logg inn" : "Opprett konto"}</div>
         {authMode === "register" && (
           <>
