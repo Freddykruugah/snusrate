@@ -18,9 +18,24 @@ const INVITE_TITLES = [
   { count: 100, title: "🐐 Snusguden" },
 ];
 
+const LOGIN_STREAK_TITLES = [
+  { days: 3, title: "🌱 Trofast snuser" },
+  { days: 7, title: "💪 Ukentlig snuser" },
+  { days: 14, title: "⚡ Dedikert snuser" },
+  { days: 30, title: "🔥 Snusfanatiker" },
+  { days: 60, title: "👑 Snuslegend" },
+  { days: 100, title: "🐐 Snusguden" },
+];
+
 const getInviteTitle = (count) => {
   let title = null;
   for (const t of INVITE_TITLES) { if (count >= t.count) title = t.title; }
+  return title;
+};
+
+const getLoginStreakTitle = (days) => {
+  let title = null;
+  for (const t of LOGIN_STREAK_TITLES) { if (days >= t.days) title = t.title; }
   return title;
 };
 
@@ -61,6 +76,61 @@ SnusRate er kun for personer over 18 år.
 
 7. COOKIES
 Vi bruker kun nødvendige cookies for innlogging.`;
+
+const BADGE_GUIDE = [
+  {
+    category: "⭐ Vurderinger",
+    badges: [
+      { title: "🌱 Nybegynner", desc: "Standard tittel" },
+      { title: "👃 Snusnese", desc: "5 vurderinger" },
+      { title: "🎯 Smaksdommer", desc: "15 vurderinger" },
+      { title: "🏅 Snusekspert", desc: "30 vurderinger" },
+      { title: "⭐ Snusmester", desc: "50 vurderinger" },
+      { title: "👑 Snuskonge", desc: "100 vurderinger" },
+    ]
+  },
+  {
+    category: "📦 Produkter lagt til",
+    badges: [
+      { title: "📦 Bidragsyter", desc: "1 godkjent produkt" },
+      { title: "🗂️ Produktjeger", desc: "3 godkjente produkter" },
+      { title: "🔍 Snusjeger", desc: "5 godkjente produkter" },
+      { title: "🏭 Snusleksikon", desc: "10 godkjente produkter" },
+    ]
+  },
+  {
+    category: "🔥 Rating streak",
+    badges: [
+      { title: "🌱 I gang", desc: "3 dager på rad med rating" },
+      { title: "💪 På strekk", desc: "7 dager på rad" },
+      { title: "⚡ På hugget", desc: "14 dager på rad" },
+      { title: "🔥 Snuslegend", desc: "30 dager på rad" },
+    ]
+  },
+  {
+    category: "📅 Pålogging streak",
+    badges: [
+      { title: "🌱 Trofast snuser", desc: "3 dager pålogget på rad" },
+      { title: "💪 Ukentlig snuser", desc: "7 dager pålogget på rad" },
+      { title: "⚡ Dedikert snuser", desc: "14 dager på rad" },
+      { title: "🔥 Snusfanatiker", desc: "30 dager på rad" },
+      { title: "👑 Snuslegend", desc: "60 dager på rad" },
+      { title: "🐐 Snusguden", desc: "100 dager på rad" },
+    ]
+  },
+  {
+    category: "📣 Invitasjoner",
+    badges: [
+      { title: "📣 Snusmisjonær", desc: "1 invitert bruker" },
+      { title: "🌟 Snusambasadør", desc: "3 inviterte" },
+      { title: "🔥 Snussprer", desc: "5 inviterte" },
+      { title: "💪 Snusrekrutterer", desc: "10 inviterte" },
+      { title: "🏆 Snusgeneral", desc: "20 inviterte" },
+      { title: "👑 Snuslegende", desc: "50 inviterte" },
+      { title: "🐐 Snusguden", desc: "100 inviterte" },
+    ]
+  },
+];
 
 const getRatingTitle = (count) => {
   if (count >= 100) return "👑 Snuskonge";
@@ -168,6 +238,7 @@ function AvatarPicker({ selected, onSelect }) {
 
 function HamburgerMenu({ onClose, onInstall }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showBadges, setShowBadges] = useState(false);
   const st = {
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200 },
     menu: { position: "fixed", top: 0, right: 0, width: 280, height: "100vh", background: "#141414", borderLeft: "1px solid #222", padding: "60px 20px 20px", zIndex: 201, overflowY: "auto" },
@@ -175,6 +246,7 @@ function HamburgerMenu({ onClose, onInstall }) {
     close: { position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#555", fontSize: 24, cursor: "pointer" },
     title: { fontSize: 11, letterSpacing: 2, color: "#444", textTransform: "uppercase", marginBottom: 8, marginTop: 20, fontWeight: 700, display: "block" },
   };
+
   if (showPrivacy) return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 300, overflowY: "auto", padding: 20 }}>
       <div style={{ maxWidth: 430, margin: "0 auto" }}>
@@ -183,6 +255,27 @@ function HamburgerMenu({ onClose, onInstall }) {
       </div>
     </div>
   );
+
+  if (showBadges) return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 300, overflowY: "auto", padding: 20 }}>
+      <div style={{ maxWidth: 430, margin: "0 auto" }}>
+        <button onClick={() => setShowBadges(false)} style={{ background: "none", border: "1px solid #333", color: "#e8b84b", borderRadius: 6, padding: "8px 16px", cursor: "pointer", marginBottom: 20 }}>← Tilbake</button>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#e8b84b", marginBottom: 20 }}>🏆 Badge-guide</div>
+        {BADGE_GUIDE.map((cat, i) => (
+          <div key={i} style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", marginBottom: 10 }}>{cat.category}</div>
+            {cat.badges.map((b, j) => (
+              <div key={j} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}>
+                <span style={{ fontSize: 13, color: "#e8e0d0" }}>{b.title}</span>
+                <span style={{ fontSize: 11, color: "#555" }}>{b.desc}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div style={st.overlay} onClick={onClose} />
@@ -191,6 +284,7 @@ function HamburgerMenu({ onClose, onInstall }) {
         <div style={{ fontSize: 20, fontWeight: 700, color: "#e8b84b", marginBottom: 24 }}>SnusRate</div>
         <span style={st.title}>Info</span>
         <div style={st.item} onClick={() => setShowPrivacy(true)}><span>📋</span> Personvernerklæring</div>
+        <div style={st.item} onClick={() => setShowBadges(true)}><span>🏆</span> Badge-guide</div>
         <div style={st.item}><span>📜</span> Vilkår for bruk</div>
         <div style={st.item}><span>ℹ️</span> Om SnusRate</div>
         <span style={st.title}>App</span>
@@ -405,6 +499,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
   const streak = calculateStreak(userReviews);
   const likesReceived = countLikesReceived(userReviews);
   const inviteTitle = getInviteTitle(profile?.inviteCount || 0);
+  const loginStreakTitle = getLoginStreakTitle(profile?.loginStreak || 0);
 
   const st = {
     modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 150, display: "flex", alignItems: "flex-end" },
@@ -436,6 +531,7 @@ function UserProfileModal({ username, currentUser, currentDisplayName, snusList,
                 <span style={st.badge}>{getRatingTitle(userReviews.length)}</span>
                 {getProductTitle(profile.approvedProducts || 0) && <span style={st.badge}>{getProductTitle(profile.approvedProducts || 0)}</span>}
                 {getStreakTitle(streak) && <span style={st.badge}>{getStreakTitle(streak)}</span>}
+                {loginStreakTitle && <span style={st.badge}>{loginStreakTitle}</span>}
                 {inviteTitle && <span style={st.badge}>{inviteTitle}</span>}
               </div>
             </div>
@@ -563,6 +659,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const productTitle = getProductTitle(userProfile?.approvedProducts || 0);
   const streakTitle = getStreakTitle(myStreak);
   const inviteTitle = getInviteTitle(userProfile?.inviteCount || 0);
+  const loginStreakTitle = getLoginStreakTitle(userProfile?.loginStreak || 0);
   const myRefCode = userProfile?.refCode || "";
   const uniqueTypes = [...new Set(snusList.map(s => s.type).filter(Boolean))].sort();
   const daysSinceLogin = daysSince(userProfile?.lastLogin);
@@ -589,7 +686,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         fetchUserProfile(u.uid);
         fetchBuddyRequests(u.uid);
         fetchBuddies(u.uid);
-        // Oppdater lastLogin
         try {
           await updateDoc(doc(db, "users", u.uid), { lastLogin: new Date().toISOString() });
         } catch(e) {}
@@ -634,7 +730,27 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           await updateDoc(doc(db, "users", uid), { refCode });
           data.refCode = refCode;
         }
-        setUserProfile(data); setProfileForm(data);
+        // Beregn login streak
+        const lastLogin = data.lastLogin ? new Date(data.lastLogin) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (lastLogin) {
+          const lastLoginDay = new Date(lastLogin);
+          lastLoginDay.setHours(0, 0, 0, 0);
+          const diff = Math.round((today - lastLoginDay) / (1000 * 60 * 60 * 24));
+          if (diff === 1) {
+            data.loginStreak = (data.loginStreak || 0) + 1;
+            await updateDoc(doc(db, "users", uid), { loginStreak: data.loginStreak });
+          } else if (diff > 1) {
+            data.loginStreak = 1;
+            await updateDoc(doc(db, "users", uid), { loginStreak: 1 });
+          }
+        } else {
+          data.loginStreak = 1;
+          await updateDoc(doc(db, "users", uid), { loginStreak: 1 });
+        }
+        setUserProfile(data);
+        setProfileForm(data);
       }
     } catch(e) {}
   };
@@ -751,7 +867,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: username.trim() });
         const refCode = generateRefCode(username.trim());
-        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0, refCode, inviteCount: 0, invitedBy: refCodeInput || null, lastLogin: new Date().toISOString() });
+        await setDoc(doc(db, "users", result.user.uid), { displayName: username.trim(), displayNameLower: username.trim().toLowerCase(), age: ageNum, gender, country, city, avatar: selectedAvatar, favoriteSnus: "", approvedProducts: 0, refCode, inviteCount: 0, invitedBy: refCodeInput || null, lastLogin: new Date().toISOString(), loginStreak: 1 });
         if (refCodeInput.trim()) {
           const refSnap = await getDocs(query(collection(db, "users"), where("refCode", "==", refCodeInput.trim())));
           if (!refSnap.empty) {
@@ -894,6 +1010,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         </div>
       </div>
       {showMenu && <HamburgerMenu onClose={() => setShowMenu(false)} onInstall={() => { setShowMenu(false); setShowInstall(true); }} />}
+      {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       <div style={s.content}>
         <div style={{ textAlign: "center", padding: "48px 0 24px", fontSize: 48 }}>🤠</div>
         <div style={{ ...s.sectionTitle, textAlign: "center", marginBottom: 20 }}>{authMode === "login" ? "Logg inn" : "Opprett konto"}</div>
@@ -940,7 +1057,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           </div>
         </div>
       )}
-      {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
     </div>
   );
 
@@ -1007,7 +1123,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
       <div style={s.content}>
 
-        {/* HJEM */}
         {tab === "hjem" && (
           <>
             <div style={{ textAlign: "center", padding: "32px 0 24px" }}>
@@ -1024,20 +1139,38 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               )}
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-              {[
-  [snusList.length, "Produkter", null],
-  [allReviews.length, "Vurderinger", null],
-  [buddies.length, "Buddies", () => setShowBuddyList(true)],
-].map(([val, label, onClick], i) => (
-  <div key={i} style={{ ...s.statBox, cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
-    <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
-    <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
-  </div>
-))}
+            {/* Badges */}
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
+              <span style={s.badge}>{ratingTitle}</span>
+              {productTitle && <span style={s.badge}>{productTitle}</span>}
+              {streakTitle && <span style={s.badge}>{streakTitle}</span>}
+              {loginStreakTitle && <span style={s.badge}>{loginStreakTitle}</span>}
+              {inviteTitle && <span style={s.badge}>{inviteTitle}</span>}
             </div>
 
-            <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px", background: "#e8b84b" }} onClick={() => setShowScanner(true)}>
+            {/* Login streak */}
+            {(userProfile?.loginStreak || 0) > 0 && (
+              <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 16px", marginBottom: 16, textAlign: "center" }}>
+                <div style={{ fontSize: 22 }}>📅</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b84b", marginTop: 4 }}>{userProfile.loginStreak} dag{userProfile.loginStreak !== 1 ? "er" : ""} på rad</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>Pålogging streak</div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              {[
+                [snusList.length, "Produkter", null],
+                [allReviews.length, "Vurderinger", null],
+                [buddies.length, "Buddies", () => setShowBuddyList(true)],
+              ].map(([val, label, onClick], i) => (
+                <div key={i} style={{ ...s.statBox, cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: "#e8b84b" }}>{val}</div>
+                  <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <button style={{ ...s.btn, marginTop: 0, marginBottom: 12, fontSize: 16, padding: "18px 20px" }} onClick={() => setShowScanner(true)}>
               📷 Skann snus
             </button>
 
@@ -1054,7 +1187,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           </>
         )}
 
-        {/* UTFORSK */}
         {tab === "explore" && (
           <>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -1176,6 +1308,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <span style={s.badge}>{ratingTitle}</span>
                 {productTitle && <span style={s.badge}>{productTitle}</span>}
                 {streakTitle && <span style={s.badge}>{streakTitle}</span>}
+                {loginStreakTitle && <span style={s.badge}>{loginStreakTitle}</span>}
                 {inviteTitle && <span style={s.badge}>{inviteTitle}</span>}
               </div>
             </div>
