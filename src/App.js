@@ -472,7 +472,7 @@ function BarcodeScanner({ onResult, onClose }) {
 
 function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose }) {
   const [search, setSearch] = useState("");
-  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", nicotine: "", flavors: [], nicotineFree: false });
+  const [newSnus, setNewSnus] = useState({ name: "", brand: "", type: "", strength: "3", description: "", nicotine: "", flavors: [], nicotineFree: false });
   const [mode, setMode] = useState("match");
   const filtered = snusList.filter(s => s.name?.toLowerCase().includes(search.toLowerCase()) || s.brand?.toLowerCase().includes(search.toLowerCase()));
   const st = {
@@ -519,6 +519,13 @@ function UnknownBarcodeModal({ barcode, snusList, onMatch, onSuggest, onClose })
             </select>
             <span style={st.label}>Strength</span>
             <StrengthSelector value={newSnus.strength} onChange={v => setNewSnus({...newSnus, strength: v})} />
+            <span style={st.label}>Nicotine (mg)</span>
+            <input style={st.input} type="number" inputMode="decimal" placeholder="e.g. 6" value={newSnus.nicotine || ""} onChange={e => setNewSnus({...newSnus, nicotine: e.target.value})} />
+            <button onClick={() => setNewSnus({...newSnus, nicotineFree: !newSnus.nicotineFree})} style={{ marginTop: 10, width: "100%", textAlign: "left", background: newSnus.nicotineFree ? "#1e1e1e" : "none", border: newSnus.nicotineFree ? "1px solid #e8b84b" : "1px solid #2a2a2a", borderRadius: 8, padding: "11px 14px", color: newSnus.nicotineFree ? "#e8b84b" : "#777", cursor: "pointer", fontSize: 13 }}>{newSnus.nicotineFree ? "☑" : "☐"} Nicotine-free</button>
+            <span style={st.label}>Flavor profile</span>
+            <FlavorPicker value={newSnus.flavors} onChange={fl => setNewSnus({...newSnus, flavors: fl})} />
+            <span style={st.label}>Description</span>
+            <input style={st.input} placeholder="e.g. Classic tobacco taste" value={newSnus.description || ""} onChange={e => setNewSnus({...newSnus, description: e.target.value})} />
             <button style={st.btn} onClick={() => onSuggest({ ...newSnus, barcode })}>Send to admin</button>
           </>
         )}
@@ -818,6 +825,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const [buddyRequests, setBuddyRequests] = useState([]);
   const [buddies, setBuddies] = useState([]);
   const [notifCount, setNotifCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
   const [viewingUser, setViewingUser] = useState(null);
   const [showBuddyList, setShowBuddyList] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -830,6 +838,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const isAdmin = user?.email === ADMIN_EMAIL;
   const displayName = user?.displayName || user?.email;
   const myAvatar = userProfile?.avatar || "🤠";
+  const unreadNotifs = notifications.filter(n => !n.read).length;
 
   const myReviews = snusList.flatMap(s => (s.reviews || []).filter(r => r.user === displayName).map(r => ({ ...r, snusId: s.id, snusName: s.name })));
   const allReviews = snusList.flatMap(s => (s.reviews || []).map(r => ({ ...r, snusId: s.id, snusName: s.name }))).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -900,6 +909,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
         fetchUserProfile(u.uid);
         fetchBuddyRequests(u.uid);
         fetchBuddies(u.uid);
+        fetchNotifications(u.uid);
       }
     });
     fetchSnus();
@@ -999,6 +1009,19 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       const all = [...snap1.docs.map(d => d.data()), ...snap2.docs.map(d => d.data())];
       setBuddies(all.map(b => b.fromUid === uid ? { name: b.toName, uid: b.toUid, avatar: b.toAvatar } : { name: b.fromName, uid: b.fromUid, avatar: b.fromAvatar }));
     } catch(e) {}
+  };
+
+  const fetchNotifications = async (uid) => {
+    try {
+      const snap = await getDocs(query(collection(db, "notifications"), where("toUid", "==", uid)));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setNotifications(list);
+    } catch(e) {}
+  };
+
+  const markNotifRead = async (notif) => {
+    try { await updateDoc(doc(db, "notifications", notif.id), { read: true }); } catch(e) {}
+    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
   };
 
   const mergeProducts = async (keepSnus, deleteSnus) => {
@@ -1221,8 +1244,17 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
     if (item.submittedByUid) {
       const snap = await getDoc(doc(db, "users", item.submittedByUid));
       if (snap.exists()) await updateDoc(doc(db, "users", item.submittedByUid), { approvedProducts: (snap.data().approvedProducts || 0) + 1 });
+      await addDoc(collection(db, "notifications"), { toUid: item.submittedByUid, text: `✅ Your suggestion "${item.name}" was approved and is now in the catalog!`, read: false, createdAt: new Date().toISOString() });
     }
     fetchPending(); fetchSnus();
+  };
+
+  const rejectPending = async (item) => {
+    await deleteDoc(doc(db, "snus_pending", item.id));
+    if (item.submittedByUid) {
+      await addDoc(collection(db, "notifications"), { toUid: item.submittedByUid, text: `❌ Your suggestion "${item.name}" was not approved this time.`, read: false, createdAt: new Date().toISOString() });
+    }
+    fetchPending();
   };
 
   const handleScanResult = (barcode) => {
@@ -1416,7 +1448,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
           <div><div style={s.logo}>SnusRate</div><div style={s.logoSub}>Nicotine Pouch Community</div></div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setShowScanner(true)} style={{ background: "none", border: "1px solid #e8b84b", color: "#e8b84b", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>📷</button>
-            {notifCount > 0 && <button onClick={() => setTab("profil")} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🤠 {notifCount}</button>}
+            {(notifCount + unreadNotifs) > 0 && <button onClick={() => setTab("profil")} style={{ background: "#e8b84b", color: "#0a0a0a", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🔔 {notifCount + unreadNotifs}</button>}
             <button onClick={() => setShowMenu(true)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer" }}>☰</button>
           </div>
         </div>
@@ -1657,6 +1689,20 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               ))}
             </div>
             <button style={{ ...s.btnOutline, marginTop: 0, marginBottom: 16 }} onClick={() => setShowInvite(true)}>📣 Invite friends · {userProfile?.inviteCount || 0} invited</button>
+            {notifications.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={s.sectionTitle}>🔔 Notifications</div>
+                {notifications.map(n => (
+                  <div key={n.id} style={{ ...s.reviewCard, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, opacity: n.read ? 0.5 : 1, border: n.read ? "1px solid #1a1a1a" : "1px solid #e8b84b" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: "#e8e0d0" }}>{n.text}</div>
+                      <div style={{ fontSize: 10, color: "#444", marginTop: 4 }}>{formatDate(n.createdAt)}</div>
+                    </div>
+                    {!n.read && <button onClick={() => markNotifRead(n)} style={{ background: "none", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#888", fontSize: 12 }}>✓</button>}
+                  </div>
+                ))}
+              </div>
+            )}
             {favSnusObj && (
               <div style={{ marginBottom: 20 }}>
                 <div style={s.sectionTitle}>Favorite pouch</div>
@@ -1875,12 +1921,13 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             {pendingList.map(item => (
               <div key={item.id} style={s.pendingCard}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
-                <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>{item.brand} · {item.type}</div>
-                <FlameStrength value={item.strength} />
+                <div style={{ fontSize: 12, color: "#555" }}>{item.brand}</div>
+                <AttributeRow snus={item} />
+                {item.description && <div style={{ fontSize: 12, color: "#555", marginTop: 6, fontStyle: "italic" }}>{item.description}</div>}
                 {item.barcode && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>EAN: {item.barcode}</div>}
                 <div style={{ fontSize: 11, color: "#444", margin: "8px 0" }}>From: {item.submittedBy}</div>
                 <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Approve</button>
-                <button style={s.btnRed} onClick={() => deleteDoc(doc(db, "snus_pending", item.id)).then(fetchPending)}>✗ Reject</button>
+                <button style={s.btnRed} onClick={() => rejectPending(item)}>✗ Reject</button>
               </div>
             ))}
           </>
