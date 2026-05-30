@@ -799,6 +799,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   const [reportedList, setReportedList] = useState([]);
   const [userList, setUserList] = useState([]);
   const [userSearch, setUserSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
   const [selectedSnus, setSelectedSnus] = useState(null);
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -1255,6 +1256,14 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
       await addDoc(collection(db, "notifications"), { toUid: item.submittedByUid, text: `❌ Your suggestion "${item.name}" was not approved this time.`, read: false, createdAt: new Date().toISOString() });
     }
     fetchPending();
+  };
+
+  const deleteProduct = async (sn) => {
+    if (!window.confirm(`Permanently delete "${sn.name}"? This removes the product and all its reviews. This cannot be undone!`)) return;
+    try {
+      await deleteDoc(doc(db, "snus", sn.id));
+      fetchSnus();
+    } catch(e) { alert("Something went wrong: " + e.message); }
   };
 
   const handleScanResult = (barcode) => {
@@ -1923,10 +1932,14 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
             )}
 
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>All products ({snusList.length})</div>
-            {snusList.map(sn => (
+            <input style={{ ...s.input, marginTop: 0, marginBottom: 10 }} placeholder="🔍 Search products to edit or delete..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+            {snusList.filter(sn => sn.name?.toLowerCase().includes(productSearch.toLowerCase()) || sn.brand?.toLowerCase().includes(productSearch.toLowerCase())).map(sn => (
               <div key={sn.id} style={{ ...s.pendingCard, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div><div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div><div style={{ fontSize: 12, color: "#555" }}>{sn.brand}</div></div>
-                <button style={s.btnSmall} onClick={() => setEditingSnus({...sn})}>✏️ Edit</button>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700 }}>{sn.name}</div><div style={{ fontSize: 12, color: "#555" }}>{sn.brand}</div></div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={s.btnSmall} onClick={() => setEditingSnus({...sn})}>✏️ Edit</button>
+                  <button style={s.btnRed} onClick={() => deleteProduct(sn)}>🗑️ Delete</button>
+                </div>
               </div>
             ))}
 
