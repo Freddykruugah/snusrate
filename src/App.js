@@ -1787,6 +1787,20 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
 
         {tab === "admin" && isAdmin && (
           <>
+            <div style={s.sectionTitle}>Pending approval ({pendingList.length})</div>
+            {pendingList.length === 0 && <div style={{ color: "#444", fontSize: 13, marginBottom: 20 }}>Nothing pending.</div>}
+            {pendingList.map(item => (
+              <div key={item.id} style={s.pendingCard}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
+                <div style={{ fontSize: 12, color: "#555" }}>{item.brand}</div>
+                <AttributeRow snus={item} />
+                {item.description && <div style={{ fontSize: 12, color: "#555", marginTop: 6, fontStyle: "italic" }}>{item.description}</div>}
+                {item.barcode && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>EAN: {item.barcode}</div>}
+                <div style={{ fontSize: 11, color: "#444", margin: "8px 0" }}>From: {item.submittedBy}</div>
+                <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Approve</button>
+                <button style={s.btnRed} onClick={() => rejectPending(item)}>✗ Reject</button>
+              </div>
+            ))}
             {duplicates.length > 0 && (
               <div style={{ background: "#1a1000", border: "1px solid #5a4000", borderRadius: 10, padding: 16, marginBottom: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b", marginBottom: 12 }}>⚠️ Possible duplicates ({duplicates.length} groups)</div>
@@ -1916,20 +1930,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
               </div>
             ))}
 
-            <div style={{ ...s.sectionTitle, marginTop: 32 }}>Pending approval ({pendingList.length})</div>
-            {pendingList.length === 0 && <div style={{ color: "#444", fontSize: 13 }}>Nothing pending.</div>}
-            {pendingList.map(item => (
-              <div key={item.id} style={s.pendingCard}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
-                <div style={{ fontSize: 12, color: "#555" }}>{item.brand}</div>
-                <AttributeRow snus={item} />
-                {item.description && <div style={{ fontSize: 12, color: "#555", marginTop: 6, fontStyle: "italic" }}>{item.description}</div>}
-                {item.barcode && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>EAN: {item.barcode}</div>}
-                <div style={{ fontSize: 11, color: "#444", margin: "8px 0" }}>From: {item.submittedBy}</div>
-                <button style={s.btnGreen} onClick={() => approvePending(item)}>✓ Approve</button>
-                <button style={s.btnRed} onClick={() => rejectPending(item)}>✗ Reject</button>
-              </div>
-            ))}
           </>
         )}
       </div>
