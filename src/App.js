@@ -1187,15 +1187,19 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
   };
 
   const submitNewSnus = async () => {
-    if (!newSnus.name || !newSnus.brand) return;
+    if (!newSnus.name.trim() || !newSnus.brand.trim()) { alert("Product name and brand are required!"); return; }
     const dup = snusList.find(s => similarName(s.name, newSnus.name));
     if (dup) { alert(`"${dup.name}" already exists! Check if it's the same product.`); return; }
+    const pendingSnap = await getDocs(collection(db, "snus_pending"));
+    const pendingDup = pendingSnap.docs.map(d => d.data()).find(p => similarName(p.name, newSnus.name));
+    if (pendingDup) { alert(`"${pendingDup.name}" is already waiting for admin approval.`); return; }
     await addDoc(collection(db, "snus_pending"), { ...newSnus, submittedBy: displayName, submittedByUid: user.uid, approved: false, createdAt: new Date().toISOString() });
+    setNewSnus({ name: "", brand: "", type: "", strength: "3", description: "", nicotine: "", flavors: [], nicotineFree: false });
     setAddSubmitted(true);
   };
 
   const adminAddSnus = async () => {
-    if (!adminNewSnus.name || !adminNewSnus.brand) return;
+    if (!adminNewSnus.name.trim() || !adminNewSnus.brand.trim()) { alert("Product name and brand are required!"); return; }
     const dup = snusList.find(s => similarName(s.name, adminNewSnus.name));
     if (dup && !window.confirm(`"${dup.name}" already exists. Add anyway?`)) return;
     await addDoc(collection(db, "snus"), { ...adminNewSnus, avgRating: 0, totalRatings: 0, totalScore: 0, favCount: 0, reviews: [], createdAt: new Date().toISOString() });
