@@ -1532,6 +1532,7 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <button style={s.filterBtn(filterNicFree)} onClick={() => setFilterNicFree(!filterNicFree)}>Nicotine-free</button>
               </div>
             )}
+            <button style={{ ...s.btn, marginTop: 0, marginBottom: 14 }} onClick={() => { setShowAddForm(true); setAddSubmitted(false); }}>+ Suggest new pouch</button>
             <div style={s.sectionTitle}>Pouches ({filtered.length})</div>
             {filtered.map(sn => (
               <div key={sn.id} style={s.card} onClick={() => openSnus(sn)}>
@@ -1562,7 +1563,6 @@ function BuddyListModal({ buddies, onSelectBuddy, onClose }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b84b" }}>⭐ {sn.favCount}</div>
               </div>
             ))}
-            <button style={s.btn} onClick={() => { setShowAddForm(true); setAddSubmitted(false); }}>+ Suggest new pouch</button>
           </>
         )}
 
